@@ -1,12 +1,17 @@
 # ============================================================
-# Lab Report Intelligence Agent – Python Dependencies
+# MediExplain AI – Python Dependencies
+# ============================================================
+# Changes:
+# - Feature 1: Added sqlalchemy, python-jose[cryptography], passlib[bcrypt]
+# - Feature 7: Replaced openai (not used) with correct GROQ/HuggingFace deps
 # ============================================================
 
 # --- Web Framework ---
 fastapi==0.111.0
 uvicorn[standard]==0.29.0
 python-multipart==0.0.9        # Required for FastAPI file uploads
-httpx<0.28.0                   # Prevent 'proxies' error in OpenAI client
+httpx<0.28.0                   # Prevent 'proxies' error in some clients
+
 # --- PDF Parsing ---
 pdfplumber==0.11.0
 
@@ -14,21 +19,27 @@ pdfplumber==0.11.0
 pandas==2.2.2
 
 # --- AI / LLM ---
-openai==1.30.1                 # GPT-4o-mini via OpenAI API
+# (OpenAI removed – not used; Groq is the active provider)
 
 # --- LangChain Ecosystem ---
 langchain==0.2.1
 langchain-core<0.3.0           # Required for Langchain 0.2.x
 langchain-groq==0.1.4          # Groq LLM integration
-langchain-openai==0.1.8        # OpenAI embeddings + LLM via LangChain
+langchain-openai==0.1.8        # OpenAI embeddings (via LangChain, for HuggingFace fallback)
 langchain-community==0.2.1     # FAISS integration for LangChain
 
 # --- Vector Store ---
 faiss-cpu==1.8.0               # CPU-only FAISS (no GPU required)
 
-# --- Embeddings (fallback/local option) ---
-sentence-transformers==2.7.0   # BAAI/bge-small-en if OpenAI not used
+# --- Embeddings ---
+sentence-transformers==2.7.0   # BAAI/bge-small-en local embeddings
+
+# --- Auth (Feature 1) ---
+sqlalchemy==2.0.30             # ORM for SQLite user + history DB
+python-jose[cryptography]==3.3.0  # JWT token creation and verification
+passlib[bcrypt]==1.7.4         # Secure password hashing
 
 # --- Utilities ---
-python-dotenv==1.0.1           # Load OPENAI_API_KEY from .env file
+python-dotenv==1.0.1           # Load env vars from .env file
 pydantic==2.7.1                # Pydantic v2 (FastAPI compatible)
+pydantic[email]                # Email validation for auth

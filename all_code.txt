@@ -1,0 +1,3511 @@
+
+==================================================
+File: combine_code.py
+==================================================
+
+import os
+
+def combine_files(output_file):
+    root_dir = r"d:\Lab Report Agent"
+    
+    # Directories and files to include
+    include_extensions = {'.py', '.js', '.html', '.css', '.env.example'}
+    exclude_dirs = {'.venv', '.git', 'node_modules', '__pycache__'}
+    
+    with open(output_file, 'w', encoding='utf-8') as outfile:
+        for root, dirs, files in os.walk(root_dir):
+            # Don't explore excluded directories
+            dirs[:] = [d for d in dirs if d not in exclude_dirs]
+            
+            for file in files:
+                if any(file.endswith(ext) for ext in include_extensions) or file == 'Dockerfile':
+                    filepath = os.path.join(root, file)
+                    rel_path = os.path.relpath(filepath, root_dir)
+                    
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as infile:
+                            content = infile.read()
+                            
+                        outfile.write(f"\n{'='*50}\n")
+                        outfile.write(f"File: {rel_path}\n")
+                        outfile.write(f"{'='*50}\n\n")
+                        outfile.write(content)
+                        outfile.write("\n")
+                    except Exception as e:
+                        print(f"Error reading {rel_path}: {e}")
+
+if __name__ == "__main__":
+    output_path = r"d:\Lab Report Agent\all_code.txt"
+    combine_files(output_path)
+    print(f"Successfully combined code into {output_path}")
+
+
+==================================================
+File: test_chatbot.py
+==================================================
+
+#!/usr/bin/env python
+"""
+Simple diagnostic script to test the chatbot functionality
+"""
+import os
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
+
+print("[1/5] Testing GROQ_API_KEY...")
+api_key = os.getenv('GROQ_API_KEY')
+if not api_key:
+    print("  ❌ GROQ_API_KEY not set!")
+    print("  Creating .env file with placeholder...")
+    # Don't actually create one, just note the issue
+else:
+    print(f"  ✓ GROQ_API_KEY is set (first 10 chars: {api_key[:10]}...)")
+
+print("\n[2/5] Testing RAG Pipeline import...")
+try:
+    from rag_pipeline import RAGPipeline
+    print("  ✓ RAG Pipeline imported successfully")
+except Exception as e:
+    print(f"  ❌ Failed to import RAG Pipeline: {e}")
+    sys.exit(1)
+
+print("\n[3/5] Testing RAG Pipeline initialization...")
+try:
+    rag = RAGPipeline()
+    print("  ✓ RAG Pipeline initialized successfully")
+except Exception as e:
+    print(f"  ❌ Failed to initialize RAG Pipeline: {e}")
+    sys.exit(1)
+
+print("\n[4/5] Testing LLM Agent import...")
+try:
+    from llm_agent import LLMAgent
+    print("  ✓ LLM Agent imported successfully")
+except Exception as e:
+    print(f"  ❌ Failed to import LLM Agent: {e}")
+    sys.exit(1)
+
+print("\n[5/5] Testing LLM Agent initialization...")
+try:
+    agent = LLMAgent(rag)
+    print("  ✓ LLM Agent initialized successfully")
+except Exception as e:
+    print(f"  ❌ Failed to initialize LLM Agent: {e}")
+    sys.exit(1)
+
+print("\n[TEST] Testing answer_question with no API key...")
+if not api_key:
+    print("  Attempting to call answer_question without GROQ_API_KEY...")
+    try:
+        result = agent.answer_question("What is hemoglobin?", "test context")
+        print(f"  Response: {result[:150]}...")
+    except Exception as e:
+        print(f"  ❌ Error: {e}")
+else:
+    print("  API key is set, would make actual API call")
+
+print("\n" + "="*60)
+print("DIAGNOSIS COMPLETE")
+print("="*60)
+
+
+==================================================
+File: backend\.env.example
+==================================================
+
+# ============================================================
+# Lab Report Intelligence Agent – Environment Configuration
+# ============================================================
+# Copy this file to .env and fill in your values.
+# The backend will automatically load this via python-dotenv.
+# ============================================================
+
+# --- OpenAI API Key (REQUIRED for AI features) ---
+# Get yours at: https://platform.openai.com/api-keys
+OPENAI_API_KEY=sk-your-openai-api-key-here
+
+# --- Optional: Change model (default: gpt-4o-mini) ---
+# OPENAI_MODEL=gpt-4o-mini
+
+# --- Optional: API server settings ---
+# HOST=0.0.0.0
+# PORT=8000
+
+
+==================================================
+File: backend\llm_agent.py
+==================================================
+
+"""
+llm_agent.py – LLM Integration & AI Summary Generator
+======================================================
+Architecture Role: Layer 6 – Explanation Generator
+                   Layer 7 – Interactive Q&A Agent
+Responsibility:
+    - Generate calm, patient-friendly AI summaries of lab results (RAG-augmented)
+    - Answer user questions via a RAG-limited Q&A agent
+    - Enforce strict safety guardrails on every LLM call
+    - Inject the required disclaimer into every response
+"""
+
+import os
+import logging
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Safety System Prompt (applied to EVERY LLM call)
+# ---------------------------------------------------------------------------
+_SAFETY_SYSTEM_PROMPT = """🧠 ROLE
+You are a warm, empathetic AI Medical Report Explanation Assistant.
+You convert structured diagnostic lab values into clear, simple, and patient-friendly explanations. 
+You must communicate in a conversational, supportive tone instead of using rigid or robotic templates.
+
+🔥 FEATURE 1: Personalized Lifestyle Suggestions (Safe Version)
+Provide general educational suggestions based on abnormal lab values.
+⚠️ STRICT RULES:
+- Do NOT prescribe medication, give dosage, or replace doctors.
+Use friendly phrases like: "General health education suggests...", "Some lifestyle approaches may help...", "It's always a good idea to discuss this with your doctor..."
+
+🚨 FEATURE 2: Emergency Detection Layer
+Detect dangerous values and softly yet firmly advise contacting a healthcare provider, without causing panic.
+Use this general tone: "This result is outside the normal range and might need your doctor's attention. Please reach out to your healthcare provider to discuss it."
+
+📈 FEATURE 3: Trend Analysis
+Analyze trends over time. Compare current vs previous values gently and naturally.
+
+🔒 GLOBAL SAFETY RULES (VERY IMPORTANT)
+❌ Never: Prescribe medication, Suggest dosage, Diagnose disease, Replace doctor, Say "You have [disease]".
+✅ Always: Say "might", Say "could", Use an empathetic educational tone, Add disclaimer when needed."""
+
+
+def _get_llm():
+    """
+    Return the LLM client.
+    - Uses Groq Llama 3.3 if GROQ_API_KEY is set.
+    - Raises a clear error if the key is missing.
+    """
+    api_key = os.getenv("GROQ_API_KEY", "")
+    if not api_key:
+        raise EnvironmentError(
+            "GROQ_API_KEY is not set or invalid. "
+            "Please set it in your environment or .env file."
+        )
+    from langchain_groq import ChatGroq
+    return ChatGroq(model="llama-3.3-70b-versatile", api_key=api_key, temperature=0.3)
+
+
+def _format_findings_for_prompt(results: list, risk_category: str) -> str:
+    """Format test results into a readable summary for the LLM prompt."""
+    lines = [f"Overall Risk Category: {risk_category}\n", "Lab Test Results:"]
+    for r in results:
+        if hasattr(r, '__dict__'):
+            r_dict = r.__dict__
+        else:
+            r_dict = r
+        status = r_dict.get("status", "Unknown")
+        name = r_dict.get("test_name", "Unknown Test")
+        value = r_dict.get("measured_value", "N/A")
+        unit = r_dict.get("unit", "")
+        ref = r_dict.get("reference_range", "N/A")
+        is_critical = r_dict.get("is_critical", False)
+        
+        critical_flag = " (CRITICAL)" if is_critical else ""
+        lines.append(f"  - {name}: {value} {unit} (Ref: {ref}) → Status: {status}{critical_flag}")
+    return "\n".join(lines)
+
+
+class LLMAgent:
+    """
+    Handles all LLM interactions with strict safety prompting.
+    Uses RAGPipeline to retrieve grounded context before generation.
+    """
+
+    def __init__(self, rag_pipeline):
+        """
+        Parameters
+        ----------
+        rag_pipeline : RAGPipeline
+            Initialized RAG pipeline for context retrieval.
+        """
+        self.rag = rag_pipeline
+        self._llm = None  # Lazy initialisation
+
+    def _get_client(self):
+        """Lazy-load the LLM client."""
+        if self._llm is None:
+            self._llm = _get_llm()
+        return self._llm
+
+    # ------------------------------------------------------------------
+    # Public Methods
+    # ------------------------------------------------------------------
+
+    def generate_summary(
+        self,
+        results: list,
+        risk_score: float,
+        risk_category: str,
+        patterns: list,
+        trends: list = None,
+    ) -> str:
+        """
+        Generate a calm, patient-friendly AI summary of the lab report.
+
+        Parameters
+        ----------
+        results : list
+            List of TestResult objects from RiskEngine.
+        risk_score : float
+            Weighted numeric risk score.
+        risk_category : str
+            Qualitative risk category.
+        patterns : list
+            Detected correlation patterns.
+        trends : list, optional
+            Detected historical trends.
+
+        Returns
+        -------
+        str
+            Patient-friendly explanation with disclaimer.
+        """
+        # Build a search query for RAG retrieval
+        abnormal_tests = [
+            r.test_name if hasattr(r, "test_name") else r.get("test_name", "")
+            for r in results
+            if (r.status if hasattr(r, "status") else r.get("status")) in ("Low", "High")
+        ]
+        rag_query = (
+            f"Lab report summary: {', '.join(abnormal_tests)} abnormal results "
+            f"risk category {risk_category}"
+            if abnormal_tests
+            else "normal lab report results patient education"
+        )
+
+        context = self.rag.retrieve(rag_query, k=4)
+        findings_text = _format_findings_for_prompt(results, risk_category)
+
+        # Build pattern text
+        pattern_lines = []
+        for p in patterns:
+            pattern_lines.append(p.get("message", ""))
+        pattern_text = "\n".join(pattern_lines) if pattern_lines else "None detected."
+
+        # Build trend text
+        trend_lines = []
+        if trends:
+            for t in trends:
+                trend_lines.append(f" - {t['test_name']}: {t['historical_value']} -> {t['current_value']} {t['unit']} ({t['trend_type']}, {t['percent_change']}% change)")
+        trend_text = "\n".join(trend_lines) if trend_lines else "No historical data or significant trends."
+
+        user_prompt = f"""Summarise these lab results in a warm, patient-friendly, glowing and unified narrative. Do not be overly rigid or robotic, and do not repeat the same test multiple times. Just speak normally like a friendly nurse would.
+
+{findings_text}
+
+Patterns (educational only): {pattern_text}
+
+Historical Trends:
+{trend_text}
+
+Reference Context (use ONLY this):
+\"\"\"
+{context}
+\"\"\"
+
+FORMAT RULES:
+1. Start with a lovely, comforting opening statement about their overall status.
+2. Write a single, flowing summary paragraph (or a few short paragraphs) that weaves the out-of-range tests (including their name, result, and reference range), their meaning, and simple lifestyle education into a natural narrative. 
+3. DO NOT use rigid headers or itemized lists for each test.
+4. If there are patterns or trends, naturally weave them into the narrative as well.
+5. Always end with exactly this on its own line: "⚠️ *This is informational only. Please consult a healthcare professional for medical advice.*"
+"""
+
+        try:
+            from langchain.schema import SystemMessage, HumanMessage
+            llm = self._get_client()
+            response = llm.invoke([
+                SystemMessage(content=_SAFETY_SYSTEM_PROMPT),
+                HumanMessage(content=user_prompt),
+            ])
+            return str(response.content)
+        except EnvironmentError as exc:
+            logger.warning("LLM unavailable: %s", exc)
+            return self._fallback_summary(results, risk_category, patterns, trends)
+        except Exception as exc:
+            logger.error("LLM summary generation failed: %s", exc)
+            return self._fallback_summary(results, risk_category, patterns, trends)
+
+    def answer_question(self, question: str, report_context: str = "") -> str:
+        """
+        Answer a user question about their lab report via RAG Q&A.
+
+        Parameters
+        ----------
+        question : str
+            The user's question in natural language.
+        report_context : str
+            Optional string summary of the user's current report results.
+
+        Returns
+        -------
+        str
+            Grounded, safe answer with disclaimer.
+        """
+        context = self.rag.retrieve(question, k=4)
+
+        user_prompt = f"""A patient is asking an interactive question about their lab results. 
+
+Patient's Report Summary:
+\"\"\"
+{report_context if report_context else "Not available."}
+\"\"\"
+
+Reference Context (use ONLY this to answer):
+\"\"\"
+{context}
+\"\"\"
+
+Patient's Question: {question}
+
+INSTRUCTIONS:
+- Answer the question directly in a friendly, empathetic, and conversational tone.
+- Use the Reference Context to provide accurate information.
+- Use short paragraphs and bold text for key terms to make the answer easy to read.
+- Follow all GLOBAL SAFETY RULES.
+- Always end your answer with a single line: "⚠️ *This is informational only. Please consult a healthcare professional for medical advice.*"
+"""
+
+        try:
+            from langchain.schema import SystemMessage, HumanMessage
+            llm = self._get_client()
+            response = llm.invoke([
+                SystemMessage(content=_SAFETY_SYSTEM_PROMPT),
+                HumanMessage(content=user_prompt),
+            ])
+            return str(response.content)
+        except EnvironmentError as exc:
+            logger.warning("LLM unavailable: %s", exc)
+            return (
+                "I'm sorry, the AI assistant is currently unavailable because no API key is configured. "
+                "Please set your GROQ_API_KEY to enable this feature.\n\n"
+                "⚠️ This is informational only. Please consult a healthcare professional for medical advice."
+            )
+        except Exception as exc:
+            logger.error("LLM Q&A failed: %s", exc)
+            return (
+                "I'm sorry, I was unable to process your question right now. "
+                "Please try again or consult a healthcare professional.\n\n"
+                "⚠️ This is informational only. Please consult a healthcare professional for medical advice."
+            )
+
+    # ------------------------------------------------------------------
+    # Fallback (no LLM available)
+    # ------------------------------------------------------------------
+
+    def _fallback_summary(
+        self, results: list, risk_category: str, patterns: list, trends: list = None
+    ) -> str:
+        """
+        Rule-based fallback summary when LLM is unavailable.
+        Patient-friendly, warm, and easy to understand.
+        """
+        # Map risk category to friendly icons and messages
+        category_info = {
+            "Stable":           ("🟢", "Everything looks quite stable overall."),
+            "Monitor":          ("🟡", "Most things look okay, with a couple of values that are worth keeping an eye on."),
+            "Moderate Concern": ("🟠", "A few values are outside the usual range and are worth discussing with your doctor."),
+            "Elevated Risk":    ("🔴", "Several values are outside the usual range — please speak with your doctor soon."),
+        }
+        icon, category_msg = category_info.get(risk_category, ("🔵", "Your results have been reviewed."))
+
+        lines = [
+            f"{icon} **Overall: {risk_category}**",
+            "",
+            category_msg,
+            "",
+        ]
+
+        abnormal = [
+            r for r in results
+            if (r.status if hasattr(r, "status") else r.get("status", "Normal")) in ("Low", "High")
+        ]
+
+        if not abnormal:
+            lines.append("All values in your report fall within the typical healthy range.")
+            lines.append("\nThis often indicates good general health for these specific parameters. However, it's always best to share your full results with your doctor to be perfectly sure.\n")
+        else:
+            for r in abnormal:
+                name = r.test_name if hasattr(r, "test_name") else r.get("test_name", "")
+                status = r.status if hasattr(r, "status") else r.get("status", "")
+                desc = (
+                    r.status_description if hasattr(r, "status_description")
+                    else r.get("status_description", "No detailed description available.")
+                )
+                
+                lines.append(f"Your **{name}** level is currently {status.lower()}. {desc}")
+                lines.append(f"In general, values like this might require a bit of monitoring. Simple lifestyle approaches can often help support your well-being, but it's always best to discuss this gently with your doctor.\n")
+
+        if patterns:
+            lines.append("")
+            lines.append("💡 **Something we noticed:**")
+            for p in patterns:
+                lines.append(f"   {p.get('message', '')}")
+            lines.append("   *(This is general educational information, not a diagnosis.)*")
+
+        lines.extend([
+            "Safety Note:",
+            "⚠️ *This is informational only. Please consult a healthcare professional for medical advice.*",
+        ])
+
+        return "\n".join(lines)
+
+
+==================================================
+File: backend\main.py
+==================================================
+
+"""
+main.py – FastAPI Application Entry Point
+==========================================
+Architecture Role: Layer 1 – PDF Upload Layer / API Gateway
+Responsibility:
+    - Expose REST API endpoints for the frontend
+    - Orchestrate parser → risk engine → LLM agent pipeline
+    - Handle errors gracefully with informative responses
+    - Enable CORS for local frontend development
+
+Endpoints:
+    GET  /health          → Health check
+    POST /upload          → Parse PDF, return extracted table
+    POST /analyze         → Full analysis: risk score + AI summary
+    POST /ask             → Q&A agent for interactive questions
+"""
+
+import os
+import io
+import logging
+from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+# Load environment variables from .env file (if present)
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Lazy-loaded singletons (initialised at startup to avoid cold-start delay)
+# ---------------------------------------------------------------------------
+_rag_pipeline = None
+_llm_agent = None
+_risk_engine = None
+
+
+def get_rag():
+    global _rag_pipeline
+    if _rag_pipeline is None:
+        from rag_pipeline import RAGPipeline
+        logger.info("Initialising RAG pipeline…")
+        _rag_pipeline = RAGPipeline()
+    return _rag_pipeline
+
+
+def get_llm():
+    global _llm_agent
+    if _llm_agent is None:
+        from llm_agent import LLMAgent
+        logger.info("Initialising LLM agent…")
+        _llm_agent = LLMAgent(get_rag())
+    return _llm_agent
+
+
+def get_risk_engine():
+    global _risk_engine
+    if _risk_engine is None:
+        from risk_engine import RiskEngine
+        logger.info("Initialising Risk Engine…")
+        _risk_engine = RiskEngine()
+    return _risk_engine
+
+
+# ---------------------------------------------------------------------------
+# FastAPI App
+# ---------------------------------------------------------------------------
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Pre-warm singletons at startup."""
+    logger.info("Starting Lab Report Intelligence Agent API…")
+    try:
+        get_risk_engine()
+        get_rag()
+        get_llm()
+        logger.info("All components initialised successfully.")
+    except Exception as exc:
+        logger.warning("Startup pre-warming failed (non-fatal): %s", exc)
+    yield
+    logger.info("Shutting down.")
+
+
+app = FastAPI(
+    title="Lab Report Intelligence Agent API",
+    description="AI-Powered Patient Report Simplifier – Hackathon Prototype",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# CORS – allow all origins for local development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Static files will be mounted at the end to avoid intercepting API routes
+
+
+# ---------------------------------------------------------------------------
+# Pydantic Models
+# ---------------------------------------------------------------------------
+
+class AskRequest(BaseModel):
+    question: str
+    report_context: str = ""
+
+
+class AnalyseRequest(BaseModel):
+    """Body includes the previously uploaded and extracted lab data."""
+    tests: list[dict]  # list of {test_name, measured_value, unit, reference_range}
+    historical_tests: list[dict] = None  # optional list of older tests for trend comparison
+
+
+# ---------------------------------------------------------------------------
+# Helper: Convert TestResult dataclass to dict for JSON serialisation
+# ---------------------------------------------------------------------------
+
+def _result_to_dict(r) -> dict:
+    return {
+        "test_name": r.test_name,
+        "measured_value": r.measured_value,
+        "unit": r.unit,
+        "reference_range": r.reference_range,
+        "status": r.status,
+        "normal_min": r.normal_min,
+        "normal_max": r.normal_max,
+        "description": r.description,
+        "status_description": r.status_description,
+        "in_benchmark": r.in_benchmark,
+        "is_critical": getattr(r, "is_critical", False),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "ok", "service": "Lab Report Intelligence Agent"}
+
+
+@app.post("/upload")
+async def upload_pdf(file: UploadFile = File(...)):
+    """
+    Layer 1 + Layer 2: Accept a PDF upload and extract lab values.
+    
+    Returns extracted lab test rows as a JSON array.
+    """
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF files are accepted. Please upload a .pdf file.",
+        )
+
+    try:
+        contents = await file.read()
+        if len(contents) == 0:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+        from parser import parse_pdf
+        df = parse_pdf(io.BytesIO(contents))
+
+        if df.empty:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "message": (
+                        "The PDF was read, but no lab test values could be extracted. "
+                        "The report may use a format that requires manual review."
+                    ),
+                    "tests": [],
+                    "count": 0,
+                },
+            )
+
+        tests = df.to_dict(orient="records")
+        logger.info("Extracted %d tests from uploaded PDF '%s'.", len(tests), file.filename)
+
+        return {
+            "success": True,
+            "message": f"Successfully extracted {len(tests)} lab test(s).",
+            "tests": tests,
+            "count": len(tests),
+        }
+
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        logger.error("PDF upload failed: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while processing the PDF. Please try again.",
+        )
+
+
+@app.post("/analyze")
+async def analyze_report(request: AnalyseRequest):
+    """
+    Layers 3–6: Full analysis pipeline.
+    
+    Accepts extracted test data, runs risk engine, and generates AI summary.
+    Returns: risk score, risk category, full results, patterns, AI summary.
+    """
+    if not request.tests:
+        raise HTTPException(
+            status_code=400,
+            detail="No test data provided. Please upload a PDF first.",
+        )
+
+    try:
+        import pandas as pd
+        df = pd.DataFrame(request.tests)
+        
+        historical_df = None
+        if request.historical_tests:
+            historical_df = pd.DataFrame(request.historical_tests)
+
+        # Layer 3 + 4: Risk engine
+        engine = get_risk_engine()
+        report = engine.analyse(df, historical_df=historical_df)
+
+        # Prepare structured results
+        results_list = [_result_to_dict(r) for r in report.results]
+
+        # Layer 6: AI Summary
+        agent = get_llm()
+        summary = agent.generate_summary(
+            results=report.results,
+            risk_score=report.risk_score,
+            risk_category=report.risk_category,
+            patterns=report.patterns,
+            trends=report.trends,
+        )
+
+        return {
+            "success": True,
+            "risk_score": report.risk_score,
+            "risk_category": report.risk_category,
+            "abnormal_count": report.abnormal_count,
+            "total_count": len(results_list),
+            "results": results_list,
+            "patterns": report.patterns,
+            "trends": report.trends,
+            "ai_summary": summary,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Analysis failed: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Analysis failed: {str(exc)}",
+        )
+
+
+@app.post("/ask")
+async def ask_question(request: AskRequest):
+    """
+    Layer 7: Interactive Q&A Agent.
+    
+    Answers patient questions about their lab report using RAG.
+    Strictly limited to knowledge base — no hallucinations.
+    """
+    if not request.question or not request.question.strip():
+        raise HTTPException(status_code=400, detail="Question cannot be empty.")
+
+    if len(request.question) > 500:
+        raise HTTPException(
+            status_code=400,
+            detail="Question is too long. Please keep it under 500 characters.",
+        )
+
+    try:
+        agent = get_llm()
+        answer = agent.answer_question(
+            question=request.question.strip(),
+            report_context=request.report_context,
+        )
+        return {
+            "success": True,
+            "question": request.question,
+            "answer": answer,
+        }
+    except Exception as exc:
+        logger.error("Q&A failed: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail="Could not generate an answer. Please try again.",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Mount frontend static files last
+# ---------------------------------------------------------------------------
+frontend_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend")
+if os.path.exists(frontend_path):
+    # html=True allows serving index.html on /
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+
+
+# ---------------------------------------------------------------------------
+# Dev entry point
+# ---------------------------------------------------------------------------
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+
+==================================================
+File: backend\parser.py
+==================================================
+
+"""
+parser.py – PDF Parsing Layer
+==============================
+Architecture Role: Layer 2 – Data Extraction Layer
+Responsibility:
+    - Accept a PDF file path or file bytes
+    - Extract lab test rows using pdfplumber + regex
+    - Return a clean Pandas DataFrame with columns:
+        [test_name, measured_value, unit, reference_range, raw_line]
+"""
+
+import re
+import io
+import logging
+import pdfplumber
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Regex patterns to capture common lab report row formats, e.g.:
+#   "Hemoglobin    13.5 g/dL    12.0 – 17.5"
+#   "WBC           6.2  K/μL    4.0-11.0"
+#   "Fasting Glucose 95 mg/dL  70-99"
+# ---------------------------------------------------------------------------
+_ROW_PATTERN = re.compile(
+    r"(?P<test_name>[A-Za-z][A-Za-z0-9\s\-/]+?)\s+"    # Test name
+    r"(?P<value>\d+\.?\d*)\s*"                           # Numeric value
+    r"(?P<unit>[a-zA-Z/%μ\*]+[^0-9\s]*?)?\s*"           # Optional unit
+    r"(?P<ref_range>\d+\.?\d*\s*[-–]\s*\d+\.?\d*)",     # Reference range
+    re.IGNORECASE,
+)
+
+# Known test name aliases for normalisation
+_TEST_ALIASES: dict[str, str] = {
+    # Hemoglobin
+    "hgb": "Hemoglobin",
+    "hb": "Hemoglobin",
+    "haemoglobin": "Hemoglobin",
+    "haemoglobin level": "Hemoglobin",
+    "hemoglobin level": "Hemoglobin",
+    "hemoglobin (hb)": "Hemoglobin",
+    "hemoglobin (hgb)": "Hemoglobin",
+    # RBC
+    "red blood cell": "RBC",
+    "red blood cells": "RBC",
+    "rbc count": "RBC",
+    "total rbc": "RBC",
+    "total rbc count": "RBC",
+    "erythrocyte count": "RBC",
+    "erythrocytes": "RBC",
+    # WBC
+    "white blood cell": "WBC",
+    "white blood cells": "WBC",
+    "wbc count": "WBC",
+    "total wbc": "WBC",
+    "total wbc count": "WBC",
+    "leukocyte count": "WBC",
+    "leukocytes": "WBC",
+    # Platelets
+    "platelet": "Platelets",
+    "platelet count": "Platelets",
+    "plt": "Platelets",
+    "plt count": "Platelets",
+    "thrombocyte count": "Platelets",
+    "thrombocytes": "Platelets",
+    # LDL
+    "ldl cholesterol": "LDL",
+    "ldl-c": "LDL",
+    "ldl-cholesterol": "LDL",
+    "low density lipoprotein": "LDL",
+    # HDL
+    "hdl cholesterol": "HDL",
+    "hdl-c": "HDL",
+    "hdl-cholesterol": "HDL",
+    "high density lipoprotein": "HDL",
+    # Fasting Glucose
+    "glucose (fasting)": "Fasting Glucose",
+    "fasting blood glucose": "Fasting Glucose",
+    "glucose, fasting": "Fasting Glucose",
+    "glucose fasting": "Fasting Glucose",
+    "blood glucose (fasting)": "Fasting Glucose",
+    "blood glucose fasting": "Fasting Glucose",
+    "blood sugar fasting": "Fasting Glucose",
+    "fbs": "Fasting Glucose",
+    "fasting sugar": "Fasting Glucose",
+    "glucose": "Fasting Glucose",
+    "blood glucose": "Fasting Glucose",
+    # Creatinine
+    "creatinine (serum)": "Creatinine",
+    "serum creatinine": "Creatinine",
+    "creatinine, serum": "Creatinine",
+    "creat": "Creatinine",
+}
+
+def _normalise_test_name(raw: str) -> str:
+    """Normalise raw test name string to a canonical benchmark key."""
+    cleaned = raw.strip().lower()
+    return _TEST_ALIASES.get(cleaned, raw.strip().title())
+
+
+def _extract_text(source) -> str:
+    """
+    Extract raw text from a pdfplumber source.
+    Accepts:
+        - str / Path   → file path
+        - bytes / BytesIO → in-memory PDF bytes
+    """
+    if isinstance(source, (bytes, bytearray)):
+        source = io.BytesIO(source)
+
+    try:
+        with pdfplumber.open(source) as pdf:
+            pages_text = []
+            for page in pdf.pages:
+                text = page.extract_text()
+                if text:
+                    pages_text.append(text)
+        return "\n".join(pages_text)
+    except Exception as exc:
+        logger.error("pdfplumber failed to open source: %s", exc)
+        raise ValueError(f"Could not read PDF: {exc}") from exc
+
+
+def parse_pdf(source) -> pd.DataFrame:
+    """
+    Parse a lab report PDF and return a structured DataFrame.
+
+    Parameters
+    ----------
+    source : str | Path | bytes | BytesIO
+        PDF to parse.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: test_name, measured_value, unit, reference_range, raw_line
+        measured_value is cast to float; non-parseable rows are skipped.
+    """
+    raw_text = _extract_text(source)
+    rows = []
+
+    for line in raw_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        match = _ROW_PATTERN.search(line)
+        if match:
+            test_name = _normalise_test_name(match.group("test_name"))
+            raw_value = match.group("value")
+            unit = (match.group("unit") or "").strip()
+            ref_range = match.group("ref_range").replace("–", "-").strip()
+
+            try:
+                measured_value = float(raw_value)
+            except ValueError:
+                logger.warning("Could not cast value '%s' for test '%s'", raw_value, test_name)
+                continue
+
+            rows.append(
+                {
+                    "test_name": test_name,
+                    "measured_value": measured_value,
+                    "unit": unit,
+                    "reference_range": ref_range,
+                    "raw_line": line,
+                }
+            )
+
+    if not rows:
+        logger.warning("No lab values extracted. PDF may use a non-standard format.")
+
+    df = pd.DataFrame(
+        rows,
+        columns=["test_name", "measured_value", "unit", "reference_range", "raw_line"],
+    )
+
+    # De-duplicate: keep last occurrence of each test (some reports repeat headers)
+    df = df.drop_duplicates(subset="test_name", keep="last").reset_index(drop=True)
+    logger.info("Extracted %d lab test rows from PDF.", len(df))
+    return df
+
+
+==================================================
+File: backend\rag_pipeline.py
+==================================================
+
+"""
+rag_pipeline.py – Retrieval-Augmented Generation (RAG) Layer
+=============================================================
+Architecture Role: Layer 5 – RAG Layer
+Responsibility:
+    - Build a knowledge base from benchmark descriptions + educational content
+    - Chunk and embed documents using OpenAI text-embedding-3-small
+      (falls back to BAAI/bge-small-en via sentence-transformers if no API key)
+    - Store embeddings in a FAISS vector store (persisted to disk)
+    - Expose retrieve(query, k) to pull relevant context for LLM prompts
+"""
+
+import os
+import json
+import logging
+from pathlib import Path
+
+from langchain.schema import Document
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+
+logger = logging.getLogger(__name__)
+
+# Paths
+_BENCHMARK_PATH = Path(__file__).parent / "benchmark.json"
+_FAISS_INDEX_PATH = Path(__file__).parent / "faiss_index"
+
+
+def _get_embeddings():
+    """
+    Return the appropriate embedding model.
+    - Uses BAAI/bge-small-en (HuggingFace) for free embeddings.
+    """
+    logger.info("Using HuggingFace BAAI/bge-small-en for embeddings.")
+    from langchain_community.embeddings import HuggingFaceEmbeddings
+    return HuggingFaceEmbeddings(model_name="BAAI/bge-small-en")
+
+
+def _build_knowledge_base() -> list[Document]:
+    """
+    Construct the RAG knowledge base from:
+    1. benchmark.json educational texts per test
+    2. General WHO-style educational documents
+    3. Disclaimer and safety guidelines
+    """
+    documents = []
+
+    # --- Source 1: Benchmark educational texts ---
+    with open(_BENCHMARK_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    for test_name, info in data.get("tests", {}).items():
+        edu_text = info.get("educational_text", "")
+        if edu_text:
+            documents.append(
+                Document(
+                    page_content=edu_text,
+                    metadata={"source": "benchmark", "test": test_name},
+                )
+            )
+
+    # --- Source 2: General WHO-style health education ---
+    general_texts = [
+        (
+            "complete_blood_count",
+            """A Complete Blood Count (CBC) is one of the most common blood tests ordered by healthcare 
+providers. It measures several components of blood including red blood cells, white blood cells, 
+hemoglobin, hematocrit, and platelets. The CBC provides a general overview of overall health and 
+can help detect a wide range of conditions including anemia, infections, and certain blood diseases. 
+Results must always be interpreted by a qualified healthcare professional in the context of the 
+patient's full clinical picture.""",
+        ),
+        (
+            "cholesterol_overview",
+            """Cholesterol is a fatty substance found in the blood. While the body needs cholesterol to 
+build healthy cells, high levels of certain types of cholesterol can increase the risk of heart 
+disease over time. There are two main types: LDL (low-density lipoprotein), often called 'bad' 
+cholesterol, and HDL (high-density lipoprotein), often called 'good' cholesterol. A lipid panel 
+blood test measures total cholesterol, LDL, HDL, and triglycerides. Diet, physical activity, and 
+genetics all play roles in cholesterol levels. Always work with a healthcare professional to 
+understand your cholesterol results.""",
+        ),
+        (
+            "blood_glucose_overview",
+            """Blood glucose (blood sugar) testing is used to check the amount of glucose in the blood. 
+Glucose is the main source of energy for the body's cells and comes primarily from the foods we eat. 
+Fasting blood glucose tests are typically performed after not eating for at least 8 hours. Consistently 
+elevated fasting blood glucose levels may be associated with prediabetes or diabetes. Managing blood 
+glucose involves a combination of diet, exercise, and in some cases medication prescribed by a doctor. 
+Lab results should always be reviewed with a healthcare professional.""",
+        ),
+        (
+            "kidney_function_overview",
+            """The kidneys are vital organs that filter waste products from the blood and regulate fluid 
+balance. Kidney function is often assessed through blood tests measuring creatinine and blood urea 
+nitrogen (BUN), as well as urine tests. Creatinine is a waste product of muscle metabolism, and 
+healthy kidneys remove it from the blood efficiently. Elevated creatinine may indicate reduced 
+kidney filtering capacity. Factors like hydration status, muscle mass, medications, and diet can 
+influence creatinine readings. Kidney function results should always be interpreted by a 
+qualified healthcare professional.""",
+        ),
+        (
+            "healthy_lifestyle_general",
+            """General lifestyle factors that support overall health include: maintaining a balanced diet 
+rich in vegetables, fruits, whole grains, and lean proteins; engaging in regular physical activity 
+(at least 150 minutes of moderate exercise per week as per WHO recommendations); getting adequate 
+sleep (7–9 hours per night for adults); staying well-hydrated by drinking sufficient water; avoiding 
+smoking; and limiting alcohol consumption. These are general wellness guidelines. Individual health 
+needs vary, and personal health decisions should always be discussed with a qualified healthcare 
+provider.""",
+        ),
+        (
+            "understanding_reference_ranges",
+            """Reference ranges in lab reports represent values that are typically observed in a healthy 
+population. They are statistical guides, not absolute thresholds. A value slightly outside the 
+reference range does not automatically mean something is wrong — many factors including age, sex, 
+pregnancy, medications, and lab-specific calibration affect what a 'normal' range looks like for an 
+individual. Similarly, a value within the reference range does not guarantee perfect health. Reference 
+ranges are best understood as one piece of information that a healthcare professional uses, alongside 
+symptoms, physical examination, and medical history, to form an overall picture of health.""",
+        ),
+        (
+            "disclaimer_and_safety",
+            """IMPORTANT DISCLAIMER: The information provided by this system is for educational purposes 
+only. It is NOT intended as medical advice, diagnosis, or treatment. Lab report interpretations 
+provided here are general educational summaries based on reference ranges and should NOT be used 
+to make any health decisions. Always consult a qualified and licensed healthcare professional, such 
+as a doctor or specialist, for interpretation of your lab results and for any medical advice. If you 
+are experiencing a medical emergency, please contact emergency services immediately. This tool is 
+designed to help you understand general concepts related to your lab report — it is not a substitute 
+for professional medical care.""",
+        ),
+    ]
+
+    for doc_id, text in general_texts:
+        documents.append(
+            Document(
+                page_content=text.strip(),
+                metadata={"source": "general_education", "topic": doc_id},
+            )
+        )
+
+    logger.info("Built knowledge base with %d raw documents.", len(documents))
+    return documents
+
+
+def _chunk_documents(documents: list[Document]) -> list[Document]:
+    """Chunk documents into smaller pieces for embedding."""
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500,
+        chunk_overlap=50,
+        separators=["\n\n", "\n", ".", " "],
+    )
+    chunks = splitter.split_documents(documents)
+    logger.info("Chunked into %d pieces for embedding.", len(chunks))
+    return chunks
+
+
+class RAGPipeline:
+    """
+    Manages the full RAG lifecycle:
+    - Build/load FAISS vector store
+    - Retrieve top-k relevant chunks for a given query
+    """
+
+    def __init__(self):
+        self.embeddings = _get_embeddings()
+        self.vectorstore = self._load_or_build_index()
+
+    def _load_or_build_index(self) -> FAISS:
+        """Load a persisted FAISS index or build and save a new one."""
+        if _FAISS_INDEX_PATH.exists():
+            logger.info("Loading existing FAISS index from %s", _FAISS_INDEX_PATH)
+            try:
+                return FAISS.load_local(
+                    str(_FAISS_INDEX_PATH),
+                    self.embeddings,
+                    allow_dangerous_deserialization=True,
+                )
+            except Exception as exc:
+                logger.warning("Failed to load FAISS index (%s). Rebuilding.", exc)
+
+        logger.info("Building new FAISS index…")
+        documents = _build_knowledge_base()
+        chunks = _chunk_documents(documents)
+        vectorstore = FAISS.from_documents(chunks, self.embeddings)
+        vectorstore.save_local(str(_FAISS_INDEX_PATH))
+        logger.info("FAISS index saved to %s", _FAISS_INDEX_PATH)
+        return vectorstore
+
+    def retrieve(self, query: str, k: int = 4) -> str:
+        """
+        Retrieve top-k relevant chunks from the knowledge base.
+
+        Parameters
+        ----------
+        query : str
+            The question or topic to search for.
+        k : int
+            Number of top chunks to retrieve.
+
+        Returns
+        -------
+        str
+            Concatenated text of retrieved chunks, separated by newlines.
+        """
+        try:
+            docs = self.vectorstore.similarity_search(query, k=k)
+            context_parts = [doc.page_content for doc in docs]
+            return "\n\n".join(context_parts)
+        except Exception as exc:
+            logger.error("RAG retrieval failed: %s", exc)
+            return "General reference information is temporarily unavailable."
+
+    def rebuild_index(self):
+        """Force-rebuild the FAISS index (useful after updating benchmark.json)."""
+        logger.info("Force-rebuilding FAISS index…")
+        documents = _build_knowledge_base()
+        chunks = _chunk_documents(documents)
+        self.vectorstore = FAISS.from_documents(chunks, self.embeddings)
+        self.vectorstore.save_local(str(_FAISS_INDEX_PATH))
+        logger.info("FAISS index rebuilt and saved.")
+
+
+==================================================
+File: backend\risk_engine.py
+==================================================
+
+"""
+risk_engine.py – Benchmark Comparison & Risk Scoring Engine
+============================================================
+Architecture Role: Layer 3 – Benchmark Comparison Engine
+                   Layer 4 – Risk Scoring Engine
+Responsibility:
+    - Load benchmark.json
+    - Compare extracted lab values against normal ranges
+    - Label each test: Low | Normal | High
+    - Compute a weighted risk score
+    - Map score to a risk category
+    - Detect lightweight correlation patterns (anemia, cardiovascular)
+"""
+
+import json
+import re
+import logging
+from pathlib import Path
+from dataclasses import dataclass, field
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+# Path to benchmark database (relative to this file)
+_BENCHMARK_PATH = Path(__file__).parent / "benchmark.json"
+
+# ---------------------------------------------------------------------------
+# Risk category thresholds (from specification)
+# ---------------------------------------------------------------------------
+RISK_THRESHOLDS = [
+    (0,   "Stable"),
+    (2,   "Monitor"),        # score 1–2
+    (4,   "Moderate Concern"),  # score 3–4
+    (9999, "Elevated Risk"),    # score 5+
+]
+
+
+def _load_benchmarks() -> dict:
+    """Load and return the benchmark.json database."""
+    try:
+        with open(_BENCHMARK_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        raise RuntimeError(
+            f"benchmark.json not found at {_BENCHMARK_PATH}. "
+            "Ensure the file exists in the backend directory."
+        )
+
+
+@dataclass
+class TestResult:
+    """Holds the analysis result for a single lab test."""
+    test_name: str
+    measured_value: float
+    unit: str
+    reference_range: str
+    status: str           # "Low" | "Normal" | "High" | "Unknown"
+    normal_min: float = 0.0
+    normal_max: float = 0.0
+    risk_weight: int = 0
+    description: str = ""
+    status_description: str = ""
+    in_benchmark: bool = True
+    is_critical: bool = False
+
+
+@dataclass
+class AnalysisReport:
+    """Full analysis result for one lab report."""
+    results: list[TestResult] = field(default_factory=list)
+    risk_score: float = 0.0
+    risk_category: str = "Stable"
+    abnormal_count: int = 0
+    patterns: list[dict] = field(default_factory=list)
+    trends: list[dict] = field(default_factory=list)
+
+class RiskEngine:
+    """
+    Compares extracted lab values against benchmarks,
+    scores risk, and detects correlation patterns.
+    """
+
+    def __init__(self):
+        data = _load_benchmarks()
+        self.benchmarks: dict = data.get("tests", {})
+        self.correlations: list = data.get("correlations", [])
+        logger.info("RiskEngine loaded %d benchmark tests.", len(self.benchmarks))
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def analyse(self, df: pd.DataFrame, historical_df: pd.DataFrame = None) -> AnalysisReport:
+        """
+        Run the full analysis pipeline on extracted lab values.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Output of parser.parse_pdf() with columns:
+            [test_name, measured_value, unit, reference_range]
+        historical_df : pd.DataFrame, optional
+            Output of a previous parser.parse_pdf() to compare against.
+
+        Returns
+        -------
+        AnalysisReport
+        """
+        report = AnalysisReport()
+
+        for _, row in df.iterrows():
+            result = self._evaluate_test(row)
+            report.results.append(result)
+
+        # Compute weighted risk score (only from abnormal tests)
+        report.risk_score = sum(
+            r.risk_weight for r in report.results if r.status in ("Low", "High")
+        )
+
+        # Map score to category
+        report.risk_category = self._score_to_category(report.risk_score)
+
+        # Count abnormal tests
+        report.abnormal_count = sum(
+            1 for r in report.results if r.status in ("Low", "High")
+        )
+
+        # Detect correlation patterns
+        report.patterns = self._detect_patterns(report.results)
+
+        # Detect trends if we have historical data
+        if historical_df is not None and not historical_df.empty:
+            report.trends = self._analyze_trends(report.results, historical_df)
+
+        logger.info(
+            "Analysis complete: %d tests, score=%.1f, category=%s, patterns=%d, trends=%d",
+            len(report.results),
+            report.risk_score,
+            report.risk_category,
+            len(report.patterns),
+            len(report.trends),
+        )
+        return report
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _find_benchmark(self, test_name: str):
+        """
+        Find the best matching benchmark for a test name.
+        Tries exact match first, then case-insensitive, then substring.
+        Returns (benchmark_key, benchmark_data) or (None, None).
+        """
+        # 1. Exact match
+        if test_name in self.benchmarks:
+            return test_name, self.benchmarks[test_name]
+
+        # 2. Case-insensitive match
+        lower_name = test_name.lower().strip()
+        for key, bm in self.benchmarks.items():
+            if key.lower() == lower_name:
+                return key, bm
+
+        # 3. Substring match — benchmark key is IN the test name or vice versa
+        #    Only match if the key is at least 3 chars to avoid false positives
+        for key, bm in self.benchmarks.items():
+            key_lower = key.lower()
+            if len(key_lower) >= 3 and (key_lower in lower_name or lower_name in key_lower):
+                return key, bm
+
+        return None, None
+
+    def _evaluate_test(self, row) -> TestResult:
+        """Evaluate a single test row against the benchmark."""
+        test_name = row["test_name"]
+        value = float(row["measured_value"])
+        unit = str(row.get("unit", ""))
+        ref_range = str(row.get("reference_range", ""))
+
+        bm_key, bm = self._find_benchmark(test_name)
+
+        if bm is None:
+            # Test not in benchmark — try to use PDF reference range
+            status = "Unknown"
+            status_desc = "This test was not found in our reference database."
+
+            # Attempt to parse reference range from PDF (e.g. "70-99")
+            ref_match = re.match(r"(\d+\.?\d*)\s*[-–]\s*(\d+\.?\d*)", ref_range)
+            if ref_match:
+                ref_min = float(ref_match.group(1))
+                ref_max = float(ref_match.group(2))
+                if value < ref_min:
+                    status = "Low"
+                    status_desc = f"Below the reference range ({ref_range})."
+                elif value > ref_max:
+                    status = "High"
+                    status_desc = f"Above the reference range ({ref_range})."
+                else:
+                    status = "Normal"
+                    status_desc = "Within the reference range."
+
+            logger.debug("Test '%s' not found in benchmark DB. Status from PDF range: %s", test_name, status)
+            return TestResult(
+                test_name=test_name,
+                measured_value=value,
+                unit=unit,
+                reference_range=ref_range,
+                status=status,
+                in_benchmark=False,
+                description="This test was not found in our reference database.",
+                status_description=status_desc,
+            )
+
+        min_val = float(bm["normal_min"])
+        max_val = float(bm["normal_max"])
+        risk_weight = int(bm.get("risk_weight", 1))
+
+        is_critical = False
+        
+        # Determine status
+        if value < min_val:
+            status = "Low"
+            status_desc = bm.get("low_description", "")
+            if "critical_min" in bm and value <= float(bm["critical_min"]):
+                is_critical = True
+        elif value > max_val:
+            status = "High"
+            status_desc = bm.get("high_description", "")
+            if "critical_max" in bm and value >= float(bm["critical_max"]):
+                is_critical = True
+        else:
+            status = "Normal"
+            status_desc = "This value is within the typical reference range."
+
+        return TestResult(
+            test_name=test_name,
+            measured_value=value,
+            unit=unit,
+            reference_range=ref_range,
+            status=status,
+            normal_min=min_val,
+            normal_max=max_val,
+            risk_weight=risk_weight if status != "Normal" else 0,
+            description=bm.get("description", ""),
+            status_description=status_desc,
+            in_benchmark=True,
+            is_critical=is_critical,
+        )
+
+    def _score_to_category(self, score: float) -> str:
+        """Map numeric risk score to a qualitative risk category."""
+        if score == 0:
+            return "Stable"
+        for threshold, category in RISK_THRESHOLDS:
+            if score <= threshold:
+                return category
+        return "Elevated Risk"
+
+    def _detect_patterns(self, results: list[TestResult]) -> list[dict]:
+        """
+        Lightweight correlation pattern detection.
+        Checks predefined patterns from benchmark.json correlations list.
+        Does NOT diagnose — only surfaces educational observations.
+        """
+        status_map = {r.test_name: r.status for r in results}
+        matched_patterns = []
+
+        for corr in self.correlations:
+            tests = corr["tests"]
+            conditions = corr["conditions"]
+
+            # Check all tests in the pattern are present and match conditions
+            if all(
+                status_map.get(t) == c for t, c in zip(tests, conditions)
+            ):
+                matched_patterns.append(
+                    {
+                        "id": corr["id"],
+                        "tests": tests,
+                        "message": corr["message"],
+                    }
+                )
+
+        return matched_patterns
+
+    def _analyze_trends(self, current_results: list[TestResult], historical_df: pd.DataFrame) -> list[dict]:
+        """
+        Compare current results to a historical DataFrame and detect trends.
+        """
+        trends = []
+        historical_dict = {}
+        for _, row in historical_df.iterrows():
+            historical_dict[row["test_name"].lower().strip()] = row
+
+        for r in current_results:
+            key = r.test_name.lower().strip()
+            if key in historical_dict:
+                hist_row = historical_dict[key]
+                try:
+                    hist_val = float(hist_row["measured_value"])
+                    curr_val = r.measured_value
+                    if hist_val == 0:
+                        continue
+                        
+                    pct_change = ((curr_val - hist_val) / hist_val) * 100
+                    
+                    if abs(pct_change) < 5:
+                        trend_type = "Stable"
+                    elif pct_change >= 20:
+                        trend_type = "Rapid change" if curr_val > hist_val else "Rapid change (decrease)"
+                    elif pct_change > 5:
+                        trend_type = "Gradually increasing"
+                    else:
+                        trend_type = "Gradually decreasing"
+                        
+                    trends.append({
+                        "test_name": r.test_name,
+                        "current_value": curr_val,
+                        "historical_value": hist_val,
+                        "unit": r.unit,
+                        "trend_type": trend_type,
+                        "percent_change": round(pct_change, 1)
+                    })
+                except ValueError:
+                    pass
+                    
+        return trends
+
+
+
+==================================================
+File: frontend\index.html
+==================================================
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description"
+    content="Lab Report Intelligence Agent – AI-powered tool to understand your medical lab report in simple, calm language." />
+  <title>MediExplain AI</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <!-- ============================================================
+       HEADER
+  ============================================================ -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="logo-block">
+        <div class="logo-icon">
+          <i class="fa-solid fa-notes-medical" style="color: white; font-size: 22px;"></i>
+        </div>
+        <div>
+          <h1 class="site-title">MediExplain AI</h1>
+        </div>
+      </div>
+      <div class="header-badge"><i class="fa-solid fa-graduation-cap"></i> Educational Tool</div>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       DISCLAIMER BANNER
+  ============================================================ -->
+  <div class="disclaimer-banner" role="note" aria-label="Disclaimer">
+    <i class="fa-solid fa-circle-exclamation"></i> <strong>Disclaimer:</strong> This tool is for <strong>educational
+      purposes only</strong>. It is not a diagnostic
+    or clinical decision system. Always consult a qualified healthcare professional.
+  </div>
+
+  <main class="main-content">
+
+    <!-- ============================================================
+         HERO SECTION
+    ============================================================ -->
+    <section class="hero-section">
+      <h1 class="hero-title">AI-Powered Medical Report Simplifier</h1>
+      <p class="hero-subtitle">Turning complex diagnostic reports into clear, safe, and actionable insights.</p>
+    </section>
+
+    <!-- ============================================================
+         SECTION 1: UPLOAD REPORT
+    ============================================================ -->
+    <section class="card upload-section" id="section-upload" aria-labelledby="upload-heading">
+
+      <div class="upload-zone" id="upload-zone" role="button" tabindex="0" aria-label="Click or drag to upload PDF">
+        <div class="upload-zone-inner">
+          <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+          <p class="upload-primary">Click to Upload or Drag & Drop (Current Report)</p>
+          <p class="upload-secondary">PDF files only · Max 10 MB</p>
+        </div>
+        <input type="file" id="file-input" accept=".pdf" aria-label="PDF file upload" />
+      </div>
+
+      <div class="upload-filename hidden" id="upload-filename">
+        <span class="filename-icon"><i class="fa-solid fa-file-pdf"></i></span>
+        <span id="filename-text"></span>
+      </div>
+
+      <div class="upload-zone secondary-upload" id="upload-zone-historical" role="button" tabindex="0"
+        aria-label="Click or drag to upload previous PDF">
+        <div class="upload-zone-inner">
+          <div class="upload-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+          <p class="upload-primary">Optional: Upload Previous Report (For Trends)</p>
+        </div>
+        <input type="file" id="file-input-historical" accept=".pdf" aria-label="Secondary PDF file upload" />
+      </div>
+
+      <div class="upload-filename hidden" id="upload-filename-historical">
+        <span class="filename-icon"><i class="fa-solid fa-file-pdf"></i></span>
+        <span id="filename-text-historical"></span>
+      </div>
+
+      <button class="btn btn-primary" id="btn-upload" disabled aria-label="Analyse lab report">
+        <i class="fa-solid fa-flask-vial"></i> Analyse Report
+      </button>
+
+      <div class="loader hidden" id="upload-loader" aria-live="polite">
+        <div class="spinner"></div>
+        <span>Extracting values from PDF…</span>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         SECTION 2: EXTRACTED LAB VALUES CARDS
+    ============================================================ -->
+    <section class="card hidden" id="section-table" aria-labelledby="table-heading">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon"><i class="fa-solid fa-chart-column"></i></span>
+          <h2 id="table-heading">Extracted Lab Values</h2>
+        </div>
+        <span class="badge badge-info" id="test-count-badge"></span>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="results-table" class="premium-table" aria-label="Lab test results">
+          <thead>
+            <tr>
+              <th>Test Name</th>
+              <th>Your Value</th>
+              <th>Unit</th>
+              <th>Reference Range</th>
+              <th>Status / Insight</th>
+            </tr>
+          </thead>
+          <tbody id="results-tbody"></tbody>
+        </table>
+      </div>
+
+      <button class="btn btn-primary" id="btn-analyze" aria-label="Generate AI analysis">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> Generate AI Analysis
+      </button>
+
+      <div class="loader hidden" id="analyze-loader" aria-live="polite">
+        <div class="spinner"></div>
+        <span>Running analysis and generating secure insights…</span>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         SECTION 3+4: RISK GAUGE & ABNORMAL HIGHLIGHTS
+    ============================================================ -->
+    <section class="card hidden" id="section-risk" aria-labelledby="risk-heading">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon"><i class="fa-solid fa-stethoscope"></i></span>
+          <h2 id="risk-heading">Risk Overview</h2>
+        </div>
+      </div>
+
+      <div class="risk-grid">
+        <!-- Risk Gauge -->
+        <div class="risk-gauge-block">
+          <p class="gauge-label">Risk Category</p>
+          <div class="risk-category-badge" id="risk-category-badge">—</div>
+          <div class="gauge-track" aria-label="Risk gauge" role="progressbar" aria-valuenow="0" aria-valuemin="0"
+            aria-valuemax="100">
+            <div class="gauge-fill" id="gauge-fill"></div>
+          </div>
+          <div class="gauge-scale">
+            <span>Stable</span>
+            <span>Monitor</span>
+            <span>Moderate</span>
+            <span>Elevated</span>
+          </div>
+          <p class="gauge-score-text" style="font-size: 0.8rem; font-weight: 500; color: #64748B; margin-top: 14px;">
+            Calculated Score: <strong id="risk-score-text">—</strong></p>
+        </div>
+
+        <!-- Abnormal Count -->
+        <div class="risk-stats-block">
+          <div class="stat-card stat-total">
+            <div>
+              <span class="stat-num" id="stat-total">—</span>
+              <span class="stat-label">Tests Reviewed</span>
+            </div>
+            <i class="fa-solid fa-vial" style="font-size: 2rem; color: #4A9EFF; opacity: 0.2;"></i>
+          </div>
+          <div class="stat-card stat-abnormal">
+            <div>
+              <span class="stat-num" id="stat-abnormal">—</span>
+              <span class="stat-label">Outside Range</span>
+            </div>
+            <i class="fa-solid fa-triangle-exclamation" style="font-size: 2rem; color: #EF4444; opacity: 0.2;"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Correlation Patterns -->
+      <div id="patterns-section" class="hidden">
+        <h3 class="section-subheading"><i class="fa-solid fa-diagram-project" style="color: #4A9EFF;"></i> Observed
+          Patterns <span class="subheading-note">Educational only</span></h3>
+        <div id="patterns-list"></div>
+      </div>
+
+      <!-- Trend Analysis -->
+      <div id="trends-section" class="hidden">
+        <h3 class="section-subheading"><i class="fa-solid fa-arrow-trend-up" style="color: #4A9EFF;"></i> Trend Analysis
+          <span class="subheading-note">Compared to previous</span>
+        </h3>
+        <div id="trends-list"></div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         SECTION 5: AI SUMMARY
+    ============================================================ -->
+    <section class="card hidden" id="section-summary" aria-labelledby="summary-heading">
+      <div id="emergency-alert" class="emergency-alert hidden">
+        <span class="alert-icon"><i class="fa-solid fa-truck-medical"></i></span>
+        <div class="alert-content">
+          <h3 class="alert-title">Urgent Alert Detected</h3>
+          <p class="alert-desc">This result may require urgent medical attention. Please consult a healthcare provider
+            immediately.</p>
+        </div>
+      </div>
+
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon"><i class="fa-solid fa-brain"></i></span>
+          <h2 id="summary-heading">AI-Generated Summary</h2>
+        </div>
+        <span class="badge badge-safe"><i class="fa-solid fa-shield-halved"></i> Patient Safe</span>
+      </div>
+      <div class="ai-summary-content" id="ai-summary-text"></div>
+    </section>
+
+    <!-- ============================================================
+         SECTION 6: ASK YOUR REPORT CHAT
+    ============================================================ -->
+    <section class="card hidden" id="section-chat" aria-labelledby="chat-heading">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon"><i class="fa-regular fa-comments"></i></span>
+          <h2 id="chat-heading">Ask Your Report</h2>
+        </div>
+        <span class="badge badge-info"><i class="fa-solid fa-bolt"></i> RAG-Powered</span>
+      </div>
+
+      <div class="chat-suggestions">
+        <div class="suggestion-chips">
+          <button class="chip" data-q="What does low hemoglobin mean?">What does low hemoglobin mean?</button>
+          <button class="chip" data-q="Why is LDL important?">Why is LDL important?</button>
+          <button class="chip" data-q="What is a normal fasting glucose?">What is a normal fasting glucose?</button>
+          <button class="chip" data-q="What do white blood cells do?">What do white blood cells do?</button>
+        </div>
+      </div>
+
+      <div class="chat-window" id="chat-window" role="log" aria-live="polite" aria-label="Conversation">
+        <div style="text-align: center; color: var(--text-muted); padding: 40px 20px;">
+          <i class="fa-solid fa-user-doctor"
+            style="font-size: 3rem; color: rgba(74, 158, 255, 0.4); margin-bottom: 16px;"></i>
+          <p style="font-weight: 500;">Ask me anything about your lab report. I'll explain it in simple, calm language
+            using verified medical education content.</p>
+        </div>
+      </div>
+
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="Type your question here…" maxlength="500"
+          aria-label="Your question" />
+        <button class="btn btn-primary btn-send" id="btn-send" aria-label="Send question">
+          Send <i class="fa-solid fa-paper-plane" style="margin-left: 6px;"></i>
+        </button>
+      </div>
+      <p style="font-size: 0.8rem; color: var(--text-light); text-align: center; margin-top: 14px; font-weight: 500;">
+        <i class="fa-solid fa-shield"></i> AI answers are educational only. Never a diagnosis or prescription.
+      </p>
+    </section>
+
+  </main>
+
+  <!-- ============================================================
+       FOOTER
+  ============================================================ -->
+  <footer class="site-footer">
+    <p><strong>MediExplain AI</strong> · Educational Use Only</p>
+    <p style="opacity: 0.7; margin-top: 6px;">Built with FastAPI · LangChain · FAISS · Llama 3.3 (Groq) · Vanilla JS</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
+
+==================================================
+File: frontend\script.js
+==================================================
+
+/**
+ * script.js – Lab Report Intelligence Agent Frontend Logic
+ * =========================================================
+ * Architecture Role: UI Layer – Vanilla JS Controller
+ * Responsibilities:
+ *   - Handle file upload and drag-and-drop
+ *   - Call backend API endpoints: /upload, /analyze, /ask
+ *   - Render extracted table, risk gauge, patterns, AI summary
+ *   - Drive interactive Q&A chat interface
+ */
+
+"use strict";
+
+// ============================================================
+// CONFIG – change BASE_URL if backend runs on a different port
+// ============================================================
+const API_BASE = window.location.origin.includes("localhost") ? "" : "http://localhost:8000";
+
+// ============================================================
+// STATE
+// ============================================================
+let uploadedTests = [];      // Raw extracted tests from /upload
+let historicalTests = [];    // Raw extracted tests from previous report
+let analysisResults = null;  // Full analysis from /analyze
+let reportContext = "";      // Text summary of report for Q&A
+
+// ============================================================
+// DOM REFERENCES
+// ============================================================
+const uploadZone = document.getElementById("upload-zone");
+const fileInput = document.getElementById("file-input");
+const uploadFilename = document.getElementById("upload-filename");
+const filenameText = document.getElementById("filename-text");
+const btnUpload = document.getElementById("btn-upload");
+const uploadLoader = document.getElementById("upload-loader");
+
+const uploadZoneHistorical = document.getElementById("upload-zone-historical");
+const fileInputHistorical = document.getElementById("file-input-historical");
+const uploadFilenameHistorical = document.getElementById("upload-filename-historical");
+const filenameTextHistorical = document.getElementById("filename-text-historical");
+
+const sectionTable = document.getElementById("section-table");
+const resultsTbody = document.getElementById("results-tbody");
+const testCountBadge = document.getElementById("test-count-badge");
+const btnAnalyze = document.getElementById("btn-analyze");
+const analyzeLoader = document.getElementById("analyze-loader");
+
+const sectionRisk = document.getElementById("section-risk");
+const riskCatBadge = document.getElementById("risk-category-badge");
+const gaugeFill = document.getElementById("gauge-fill");
+const gaugeEl = document.querySelector(".gauge-track");
+const riskScoreText = document.getElementById("risk-score-text");
+const statTotal = document.getElementById("stat-total");
+const statAbnormal = document.getElementById("stat-abnormal");
+const patternsSection = document.getElementById("patterns-section");
+const patternsList = document.getElementById("patterns-list");
+const trendsSection = document.getElementById("trends-section");
+const trendsList = document.getElementById("trends-list");
+const emergencyAlert = document.getElementById("emergency-alert");
+
+const sectionSummary = document.getElementById("section-summary");
+const aiSummaryText = document.getElementById("ai-summary-text");
+
+const sectionChat = document.getElementById("section-chat");
+const chatWindow = document.getElementById("chat-window");
+const chatInput = document.getElementById("chat-input");
+const btnSend = document.getElementById("btn-send");
+
+// ============================================================
+// SECTION 1: FILE UPLOAD
+// ============================================================
+
+// Drag-and-drop support
+uploadZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    uploadZone.classList.add("drag-over");
+});
+
+uploadZone.addEventListener("dragleave", () => {
+    uploadZone.classList.remove("drag-over");
+});
+
+uploadZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove("drag-over");
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileSelected(file);
+});
+
+// Keyboard accessibility for upload zone
+uploadZone.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") fileInput.click();
+});
+
+fileInput.addEventListener("change", () => {
+    if (fileInput.files[0]) handleFileSelected(fileInput.files[0]);
+});
+
+function handleFileSelected(file) {
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+        showToast("⚠️ Please upload a PDF file.", "warning");
+        return;
+    }
+    filenameText.textContent = file.name;
+    uploadFilename.classList.remove("hidden");
+    btnUpload.disabled = false;
+}
+
+btnUpload.addEventListener("click", async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    setLoading(btnUpload, uploadLoader, true);
+
+    // Clear previous results
+    sectionTable.classList.add("hidden");
+    sectionRisk.classList.add("hidden");
+    sectionSummary.classList.add("hidden");
+    sectionChat.classList.add("hidden");
+    chatWindow.innerHTML = `<div class="chat-welcome"><div class="welcome-icon">🩺</div><p>Ask me anything about your lab report. I'll explain it in simple, calm language.</p></div>`;
+    analysisResults = null;
+    reportContext = "";
+
+    try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await fetch(`${API_BASE}/upload`, {
+            method: "POST",
+            body: formData,
+        });
+
+        const data = await handleResponse(res);
+
+        if (!data.tests || data.tests.length === 0) {
+            showToast(
+                "No lab values could be extracted. The PDF may use an unsupported format.",
+                "warning"
+            );
+            return;
+        }
+
+        uploadedTests = data.tests;
+        renderResultsTable(uploadedTests);
+
+        // Upload Historical Report if selected
+        const fileHist = fileInputHistorical.files[0];
+        if (fileHist) {
+            const formDataHist = new FormData();
+            formDataHist.append("file", fileHist);
+            const resHist = await fetch(`${API_BASE}/upload`, {
+                method: "POST",
+                body: formDataHist,
+            });
+            const dataHist = await handleResponse(resHist);
+            if (dataHist.tests && dataHist.tests.length > 0) {
+                historicalTests = dataHist.tests;
+                showToast(`✅ Extracted ${dataHist.count} historical test(s) successfully.`, "success");
+            }
+        }
+
+        sectionTable.classList.remove("hidden");
+        sectionTable.scrollIntoView({ behavior: "smooth", block: "start" });
+        showToast(`✅ Extracted ${data.count} lab test(s) successfully.`, "success");
+    } catch (err) {
+        showToast(`❌ Upload failed: ${err.message}`, "error");
+    } finally {
+        setLoading(btnUpload, uploadLoader, false);
+    }
+});
+
+// Secondary Upload Drag and Drop
+uploadZoneHistorical.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    uploadZoneHistorical.classList.add("drag-over");
+});
+
+uploadZoneHistorical.addEventListener("dragleave", () => {
+    uploadZoneHistorical.classList.remove("drag-over");
+});
+
+uploadZoneHistorical.addEventListener("drop", (e) => {
+    e.preventDefault();
+    uploadZoneHistorical.classList.remove("drag-over");
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileSelectedHistorical(file);
+});
+
+uploadZoneHistorical.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") fileInputHistorical.click();
+});
+
+fileInputHistorical.addEventListener("change", () => {
+    if (fileInputHistorical.files[0]) handleFileSelectedHistorical(fileInputHistorical.files[0]);
+});
+
+function handleFileSelectedHistorical(file) {
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+        showToast("⚠️ Please upload a PDF file.", "warning");
+        return;
+    }
+    filenameTextHistorical.textContent = file.name;
+    uploadFilenameHistorical.classList.remove("hidden");
+}
+
+// ============================================================
+// SECTION 2: RENDER EXTRACTED TABLE
+// ============================================================
+
+function renderResultsTable(tests) {
+    resultsTbody.innerHTML = "";
+    testCountBadge.textContent = `${tests.length} tests`;
+
+    tests.forEach((t) => {
+        const tr = document.createElement("tr");
+        tr.dataset.name = t.test_name;
+
+        tr.innerHTML = `
+          <td>${escHtml(t.test_name)}</td>
+          <td>${escHtml(String(t.measured_value))}</td>
+          <td>${escHtml(t.unit || "—")}</td>
+          <td>${escHtml(t.reference_range || "—")}</td>
+          <td class="status-cell">
+            <span class="result-status ${escHtml(t.status || 'Unknown')}">${escHtml(t.status || 'Unknown')}</span>
+          </td>
+        `;
+        resultsTbody.appendChild(tr);
+    });
+}
+
+function updateTableWithStatus(results) {
+    const rows = resultsTbody.querySelectorAll("tr");
+    results.forEach((r, i) => {
+        const row = Array.from(rows).find(c => c.dataset.name === r.test_name);
+        if (row) {
+            const statusCell = row.querySelector(".status-cell");
+
+            let statusHtml = `<span class="result-status ${r.status}">${r.status}</span>`;
+
+            if (r.is_critical) {
+                row.classList.add("critical");
+                statusHtml = `<span class="result-status ${r.status}">${r.status} <i class="fa-solid fa-triangle-exclamation" style="margin-left:4px"></i></span>`;
+            }
+
+            if (r.status !== "Normal") {
+                const desc = r.status_description || r.description || '';
+                statusHtml += `<div class="result-desc">${desc}</div>`;
+            }
+
+            statusCell.innerHTML = statusHtml;
+        }
+    });
+}
+
+// ============================================================
+// SECTION 3+4+5: ANALYZE REPORT
+// ============================================================
+
+btnAnalyze.addEventListener("click", async () => {
+    if (!uploadedTests.length) return;
+
+    setLoading(btnAnalyze, analyzeLoader, true);
+
+    try {
+        const payload = { tests: uploadedTests };
+        if (historicalTests.length > 0) {
+            payload.historicalTests = historicalTests;
+            payload.historical_tests = historicalTests; // ensure snake_case matches backend
+        }
+
+        const res = await fetch(`${API_BASE}/analyze`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+
+        const data = await handleResponse(res);
+        analysisResults = data;
+
+        // Update cards status cells
+        updateTableWithStatus(data.results);
+
+        // Build report context for Q&A
+        reportContext = buildReportContext(data);
+
+        // Risk gauge
+        renderRiskGauge(data.risk_score, data.risk_category, data.abnormal_count, data.total_count);
+        sectionRisk.classList.remove("hidden");
+
+        // Patterns
+        if (data.patterns && data.patterns.length > 0) {
+            renderPatterns(data.patterns);
+            patternsSection.classList.remove("hidden");
+        } else {
+            patternsSection.classList.add("hidden");
+        }
+
+        // Trends
+        if (data.trends && data.trends.length > 0) {
+            renderTrends(data.trends);
+            trendsSection.classList.remove("hidden");
+        } else {
+            trendsSection.classList.add("hidden");
+        }
+
+        // Emergency Alert Detection
+        if (data.ai_summary && data.ai_summary.includes("immediate medical attention")) {
+            emergencyAlert.classList.remove("hidden");
+        } else {
+            emergencyAlert.classList.add("hidden");
+        }
+
+        // AI summary
+        renderSummary(data.ai_summary);
+        sectionSummary.classList.remove("hidden");
+
+        // Show chat
+        sectionChat.classList.remove("hidden");
+
+        // Scroll to risk section
+        sectionRisk.scrollIntoView({ behavior: "smooth", block: "start" });
+        showToast("✅ Analysis complete!", "success");
+    } catch (err) {
+        showToast(`❌ Analysis failed: ${err.message}`, "error");
+    } finally {
+        setLoading(btnAnalyze, analyzeLoader, false);
+    }
+});
+
+// ============================================================
+// RISK GAUGE RENDERING
+// ============================================================
+
+const RISK_CONFIG = {
+    Stable: { pct: 10, color: "#2FB344", textColor: "#166534", bg: "#DCFCE7" },
+    Monitor: { pct: 35, color: "#F6C343", textColor: "#92400E", bg: "#FFFBEB" },
+    "Moderate Concern": { pct: 65, color: "#F97316", textColor: "#7C2D12", bg: "#FFF7ED" },
+    "Elevated Risk": { pct: 92, color: "#E55353", textColor: "#991B1B", bg: "#FEE2E2" },
+};
+
+function renderRiskGauge(score, category, abnormal, total) {
+    const cfg = RISK_CONFIG[category] || RISK_CONFIG["Stable"];
+
+    riskCatBadge.textContent = category;
+    riskCatBadge.style.background = cfg.bg;
+    riskCatBadge.style.color = cfg.textColor;
+
+    gaugeFill.style.width = cfg.pct + "%";
+    gaugeFill.style.background = cfg.color;
+
+    if (gaugeEl) {
+        gaugeEl.setAttribute("aria-valuenow", cfg.pct);
+    }
+
+    riskScoreText.textContent = score.toFixed(1);
+    statTotal.textContent = total;
+    statAbnormal.textContent = abnormal;
+}
+
+function renderPatterns(patterns) {
+    patternsList.innerHTML = "";
+    patterns.forEach((p) => {
+        const div = document.createElement("div");
+        div.className = "pattern-item";
+        div.textContent = p.message;
+        patternsList.appendChild(div);
+    });
+}
+
+function renderTrends(trends) {
+    trendsList.innerHTML = "";
+    trends.forEach((t) => {
+        const div = document.createElement("div");
+        div.className = "pattern-item";
+        const icon = t.percent_change > 0 ? "↗️" : t.percent_change < 0 ? "↘️" : "➡️";
+        div.innerHTML = `<strong>${escHtml(t.test_name)}</strong>: ${icon} ${escHtml(t.trend_type)} (${t.percent_change > 0 ? '+' : ''}${t.percent_change}%) <br> <small style="color: #64748b;">Previous: ${t.historical_value} ${t.unit} → Current: ${t.current_value} ${t.unit}</small>`;
+        trendsList.appendChild(div);
+    });
+}
+
+function renderSummary(text) {
+    aiSummaryText.innerHTML = markdownToHtml(text || "No summary generated.");
+}
+
+// ============================================================
+// SECTION 6: Q&A CHAT
+// ============================================================
+
+// Suggestion chip click
+document.querySelectorAll(".chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+        chatInput.value = chip.dataset.q;
+        chatInput.focus();
+    });
+});
+
+btnSend.addEventListener("click", sendQuestion);
+
+chatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendQuestion();
+    }
+});
+
+async function sendQuestion() {
+    const question = chatInput.value.trim();
+    if (!question) return;
+
+    chatInput.value = "";
+    btnSend.disabled = true;
+
+    // Remove welcome message on first real message
+    const welcome = chatWindow.querySelector(".chat-welcome");
+    if (welcome) welcome.remove();
+
+    // Add user bubble
+    appendChatBubble(question, "user");
+
+    // Add thinking indicator
+    const thinkingEl = appendChatBubble("Thinking…", "thinking");
+
+    try {
+        const res = await fetch(`${API_BASE}/ask`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ question, report_context: reportContext }),
+        });
+
+        const data = await handleResponse(res);
+        thinkingEl.remove();
+
+        if (data.success && data.answer) {
+            appendChatBubble(data.answer, "bot");
+        } else {
+            console.error("Chat Error: Invalid response data", data);
+            appendChatBubble("I'm sorry, I received an invalid response from the medical agent.", "bot");
+        }
+    } catch (err) {
+        console.error("Chat Fetch Failure:", err);
+        thinkingEl.remove();
+        appendChatBubble(`Sorry, I couldn't get an answer right now: ${err.message}`, "bot");
+    } finally {
+        btnSend.disabled = false;
+        chatInput.focus();
+    }
+}
+
+function appendChatBubble(text, type) {
+    const div = document.createElement("div");
+    div.className = `chat-bubble chat-bubble-${type === "user" ? "user" : type === "thinking" ? "thinking" : "bot"
+        }`;
+    if (type === "bot") {
+        try {
+            div.innerHTML = markdownToHtml(text);
+        } catch (err) {
+            console.error("Markdown Parsing Error:", err);
+            div.textContent = text; // Fallback to raw text if parser fails
+        }
+    } else {
+        div.textContent = text;
+    }
+    chatWindow.appendChild(div);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+    return div;
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+function setLoading(btn, loader, isLoading) {
+    btn.disabled = isLoading;
+    loader.classList.toggle("hidden", !isLoading);
+}
+
+async function handleResponse(res) {
+    if (!res.ok) {
+        let msg = `Server error: ${res.status}`;
+        try {
+            const err = await res.json();
+            msg = err.detail || msg;
+        } catch (_) { }
+        throw new Error(msg);
+    }
+    try {
+        return await res.json();
+    } catch (err) {
+        throw new Error("Invalid response format from server.");
+    }
+}
+
+function statusBadge(status, is_critical = false) {
+    const classMap = {
+        Normal: "status-normal",
+        Low: "status-low",
+        High: "status-high",
+        Unknown: "status-unknown",
+        "—": "status-unknown",
+    };
+    const cls = classMap[status] || "status-unknown";
+    let badge = `<span class="status-badge ${cls}">${escHtml(status)}</span>`;
+    if (is_critical) {
+        badge += ` <span class="status-badge" style="background:#dc2626;color:white;font-weight:bold;margin-left:8px;">🚨 CRITICAL</span>`;
+    }
+    return badge;
+}
+
+function escHtml(str) {
+    if (str === null || str === undefined) return "—";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+/**
+ * Simple markdown-to-HTML converter for AI output.
+ * Supports: **bold**, *italic*, ## headings, - bullets, ---, and line breaks.
+ */
+function markdownToHtml(md) {
+    if (!md) return "";
+    // Escape HTML first
+    let html = md
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    // Headings (## Heading)
+    html = html.replace(/^##\s+(.+)$/gm, '<strong style="font-size:1.05em;display:block;margin:10px 0 4px">$1</strong>');
+
+    // Horizontal rule (---)
+    html = html.replace(/^---$/gm, '<hr>');
+
+    // Bold (**text**)
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    // Italic (*text*) - Using a safer pattern to avoid lookbehind issues in some browsers
+    html = html.replace(/([^\*]|^)\*([^\*]+)\*([^\*]|$)/g, '$1<em>$2</em>$3');
+
+    // Bullet points (- item or • item)
+    html = html.replace(/^[\-•]\s+(.+)$/gm, '<div style="padding-left:16px;margin:3px 0">• $1</div>');
+
+    // Convert double newlines to paragraph breaks
+    html = html.replace(/\n\n/g, '<br><br>');
+
+    // Convert remaining single newlines to breaks
+    html = html.replace(/\n/g, '<br>');
+
+    // Add a simple safety card styling if the disclaimer is found
+    // Using [\s\S] instead of 's' flag for better compatibility
+    html = html.replace(/⚠️([\s\S]*?)\*(.*?)\*/gi, (match, p1, p2) => {
+        return `<div class="safety-card"><strong>⚠️ Note:</strong> ${p2}</div>`;
+    });
+
+    return html;
+}
+
+function buildReportContext(data) {
+    const lines = [
+        `Risk Category: ${data.risk_category} (Score: ${data.risk_score})`,
+        `Tests Outside Reference Range: ${data.abnormal_count} of ${data.total_count}`,
+        "",
+        "Test Results:",
+    ];
+    (data.results || []).forEach((r) => {
+        lines.push(
+            `  ${r.test_name}: ${r.measured_value} ${r.unit} [Ref: ${r.reference_range}] → ${r.status}`
+        );
+    });
+    return lines.join("\n");
+}
+
+function showToast(message, type = "info") {
+    // Remove any existing toast
+    const existing = document.querySelector(".toast");
+    if (existing) existing.remove();
+
+    const toast = document.createElement("div");
+    toast.className = "toast";
+    toast.textContent = message;
+
+    const colorMap = {
+        success: "#2FB344",
+        warning: "#F6C343",
+        error: "#E55353",
+        info: "#2C7BE5",
+    };
+
+    Object.assign(toast.style, {
+        position: "fixed",
+        bottom: "28px",
+        right: "28px",
+        background: colorMap[type] || colorMap.info,
+        color: "#fff",
+        padding: "12px 22px",
+        borderRadius: "12px",
+        fontSize: "0.88rem",
+        fontFamily: "'Inter', sans-serif",
+        fontWeight: "600",
+        boxShadow: "0 4px 18px rgba(0,0,0,0.18)",
+        zIndex: "9999",
+        maxWidth: "360px",
+        lineHeight: "1.5",
+        opacity: "0",
+        transition: "opacity 0.25s ease",
+    });
+
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => { toast.style.opacity = "1"; });
+
+    setTimeout(() => {
+        toast.style.opacity = "0";
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+
+==================================================
+File: frontend\style.css
+==================================================
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
+
+/* ============================================================
+   MediExplain AI – Premium Healthcare SaaS UI (V2)
+   Deep Navy, Sky Blue, Mint Green, Glassmorphism
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* Premium Healthcare Palette */
+  --navy: #0A1628;
+  --white: #FFFFFF;
+  --sky-blue: #4A9EFF;
+  --sky-blue-hover: #3A8EEF;
+  --sky-blue-light: rgba(74, 158, 255, 0.1);
+  --mint-green: #00C896;
+  --mint-green-light: rgba(0, 200, 150, 0.1);
+  --warm-gray: #F4F6F9;
+  --text-main: #1A2234;
+  --text-muted: #64748B;
+  --text-light: #94A3B8;
+  --danger: #EF4444;
+  --danger-lt: #FEF2F2;
+  --warning: #F59E0B;
+  --warning-lt: #FFFBEB;
+
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+
+  /* Soft Shadows & Glassmorphism */
+  --shadow-soft: 0 4px 20px rgba(10, 22, 40, 0.04);
+  --shadow-hover: 0 10px 30px rgba(10, 22, 40, 0.08);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.4);
+  --glass-blur: blur(12px);
+
+  --font: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --ease-spring: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease: 0.3s ease;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--warm-gray);
+  /* Background mesh gradient for premium feel */
+  background-image:
+    radial-gradient(at 0% 0%, rgba(74, 158, 255, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(0, 200, 150, 0.1) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(74, 158, 255, 0.1) 0px, transparent 50%);
+  background-attachment: fixed;
+  color: var(--text-main);
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ============================================================
+   HEADER / TOP NAVIGATION
+============================================================ */
+.site-header {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  padding: 16px 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid rgba(10, 22, 40, 0.05);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+}
+
+.header-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--sky-blue), var(--navy));
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  box-shadow: 0 4px 10px rgba(74, 158, 255, 0.3);
+}
+
+.site-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--navy);
+  letter-spacing: -0.02em;
+}
+
+.header-badge {
+  background: var(--sky-blue-light);
+  color: var(--sky-blue);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(74, 158, 255, 0.2);
+}
+
+/* ============================================================
+   DISCLAIMER BANNER
+============================================================ */
+.disclaimer-banner {
+  background: var(--warning-lt);
+  color: #B45309;
+  font-size: 0.85rem;
+  padding: 12px 24px;
+  text-align: center;
+  font-weight: 500;
+  border-bottom: 1px solid #FDE68A;
+}
+
+/* ============================================================
+   MAIN CONTENT & HERO
+============================================================ */
+.main-content {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 60px 20px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.hero-section {
+  text-align: center;
+  margin-bottom: 10px;
+  animation: fadeInDown 0.6s ease forwards;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-title {
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--navy);
+  margin-bottom: 16px;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.hero-subtitle {
+  font-size: 1.15rem;
+  color: var(--text-muted);
+  max-width: 650px;
+  margin: 0 auto;
+  font-weight: 400;
+}
+
+/* ============================================================
+   GLASSMORPHISM CARDS
+============================================================ */
+.card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  box-shadow: var(--shadow-soft);
+  transition: box-shadow var(--ease), transform var(--ease);
+  position: relative;
+  overflow: hidden;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(10, 22, 40, 0.06);
+}
+
+.card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.card-icon {
+  font-size: 1.5rem;
+  background: var(--sky-blue-light);
+  color: var(--sky-blue);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+}
+
+.card-header h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--navy);
+  letter-spacing: -0.01em;
+}
+
+/* ============================================================
+   BADGES
+============================================================ */
+.badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.badge i {
+  font-size: 0.8em;
+}
+
+.badge-info {
+  background: var(--sky-blue-light);
+  color: var(--sky-blue);
+}
+
+.badge-safe {
+  background: var(--mint-green-light);
+  color: var(--mint-green);
+}
+
+.badge-warning {
+  background: var(--warning-lt);
+  color: #B45309;
+}
+
+.badge-danger {
+  background: var(--danger-lt);
+  color: var(--danger);
+}
+
+/* ============================================================
+   UPLOAD SECTION (DRAG & DROP)
+============================================================ */
+.upload-zone {
+  border: 2px dashed rgba(10, 22, 40, 0.15);
+  border-radius: var(--radius-md);
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--ease);
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.6);
+  margin-bottom: 20px;
+}
+
+.upload-zone:hover,
+.upload-zone.drag-over {
+  border-color: var(--sky-blue);
+  background: var(--sky-blue-light);
+  transform: scale(1.01);
+}
+
+.upload-zone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+.upload-icon {
+  font-size: 2.5rem;
+  margin-bottom: 16px;
+  color: var(--sky-blue);
+  transition: transform var(--ease-spring);
+}
+
+.upload-zone:hover .upload-icon {
+  transform: translateY(-6px);
+}
+
+.upload-primary {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--navy);
+  margin-bottom: 6px;
+}
+
+.upload-secondary {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.upload-filename {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--white);
+  border: 1px solid var(--sky-blue);
+  border-radius: var(--radius-sm);
+  padding: 14px 20px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--navy);
+  margin-bottom: 20px;
+  box-shadow: 0 4px 12px rgba(74, 158, 255, 0.1);
+}
+
+.filename-icon {
+  color: var(--sky-blue);
+  font-size: 1.1rem;
+}
+
+/* ============================================================
+   PREMIUM TABLE LAYOUT (RESTORING TABULAR FORMAT)
+============================================================ */
+.table-wrapper {
+  background: var(--white);
+  border: 1px solid rgba(10, 22, 40, 0.08);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(10, 22, 40, 0.03);
+  margin-bottom: 30px;
+}
+
+.premium-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.premium-table thead {
+  background: var(--warm-gray);
+  border-bottom: 2px solid rgba(10, 22, 40, 0.08);
+}
+
+.premium-table th {
+  padding: 16px 20px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.premium-table td {
+  padding: 20px;
+  border-bottom: 1px solid rgba(10, 22, 40, 0.05);
+  font-size: 0.95rem;
+  vertical-align: middle;
+}
+
+.premium-table tbody tr {
+  transition: background-color var(--ease);
+}
+
+.premium-table tbody tr:hover {
+  background-color: var(--sky-blue-light);
+}
+
+.premium-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.premium-table td:first-child {
+  font-weight: 700;
+  color: var(--navy);
+  font-size: 1.05rem;
+}
+
+.premium-table td:nth-child(2) {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.result-status {
+  display: inline-flex;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.result-status.Normal {
+  background: var(--mint-green-light);
+  color: var(--mint-green);
+}
+
+.result-status.Low,
+.result-status.High {
+  background: var(--warning-lt);
+  color: #B45309;
+}
+
+.premium-table tr.critical {
+  background: #FFFAFA;
+  border-left: 4px solid var(--danger);
+}
+
+.premium-table tr.critical td {
+  border-bottom-color: rgba(239, 68, 68, 0.1);
+}
+
+.premium-table tr.critical td:nth-child(2) {
+  color: var(--danger);
+}
+
+.premium-table tr.critical .result-status {
+  background: var(--danger-lt);
+  color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger);
+}
+
+.result-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 8px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+
+
+/* ============================================================
+   EMERGENCY ALERT
+============================================================ */
+.emergency-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  background: var(--white);
+  border: 1px solid var(--danger);
+  border-left: 8px solid var(--danger);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  margin-bottom: 32px;
+  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.15);
+  animation: slideInPulse 0.6s ease;
+}
+
+@keyframes slideInPulse {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+
+  50% {
+    transform: translateX(5px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.alert-icon {
+  font-size: 28px;
+  animation: heartBeat 1.5s infinite;
+}
+
+@keyframes heartBeat {
+  0% {
+    transform: scale(1);
+  }
+
+  14% {
+    transform: scale(1.15);
+  }
+
+  28% {
+    transform: scale(1);
+  }
+
+  42% {
+    transform: scale(1.15);
+  }
+
+  70% {
+    transform: scale(1);
+  }
+}
+
+.alert-content {
+  color: var(--text-main);
+}
+
+.alert-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--danger);
+  margin-bottom: 6px;
+}
+
+.alert-desc {
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   AI SUMMARY ENHANCEMENTS & LIFESTYLE EDUCATION
+============================================================ */
+.ai-summary-content {
+  font-size: 1.05rem;
+  line-height: 1.8;
+  color: var(--text-main);
+}
+
+.ai-summary-content p {
+  margin-bottom: 16px;
+}
+
+.ai-summary-content strong {
+  color: var(--navy);
+  font-weight: 700;
+}
+
+/* Safety Card Injection Styling */
+.safety-card {
+  background: linear-gradient(145deg, var(--warning-lt), var(--white));
+  border-left: 6px solid var(--warning);
+  border-radius: var(--radius-md);
+  padding: 24px 28px;
+  margin: 32px 0;
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.1);
+  font-size: 0.95rem;
+}
+
+.safety-card strong {
+  color: #B45309;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.15rem;
+  margin-bottom: 12px;
+}
+
+/* ============================================================
+   BUTTONS (PREMIUM GRADIENTS & HOVER)
+============================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 32px;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font);
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--ease-spring);
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--sky-blue), var(--navy));
+  color: var(--white);
+  box-shadow: 0 6px 20px rgba(74, 158, 255, 0.3);
+}
+
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, var(--sky-blue-hover), #0f223f);
+  z-index: -1;
+  opacity: 0;
+  transition: opacity var(--ease);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(74, 158, 255, 0.4);
+}
+
+.btn-primary:hover:not(:disabled)::before {
+  opacity: 1;
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  background: #CBD5E1;
+  color: #F8FAFC;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* ============================================================
+   LOADER (SHIMMER & SPINNER)
+============================================================ */
+.loader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 1rem;
+  color: var(--navy);
+  margin-top: 24px;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(74, 158, 255, 0.3);
+  border-top-color: var(--sky-blue);
+  border-radius: 50%;
+  animation: spin 0.8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================
+   RISK GAUGE
+============================================================ */
+.risk-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 32px;
+}
+
+@media (max-width: 768px) {
+  .risk-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.risk-gauge-block {
+  text-align: center;
+  padding: 32px;
+  background: var(--white);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(10, 22, 40, 0.06);
+  box-shadow: var(--shadow-soft);
+}
+
+.gauge-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  letter-spacing: 0.05em;
+}
+
+.risk-category-badge {
+  display: inline-block;
+  font-size: 1.4rem;
+  font-weight: 800;
+  padding: 10px 28px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 24px;
+}
+
+.gauge-track {
+  background: #E2E8F0;
+  border-radius: 999px;
+  height: 16px;
+  overflow: hidden;
+  max-width: 320px;
+  margin: 0 auto;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.gauge-fill {
+  height: 100%;
+  border-radius: 999px;
+  width: 0%;
+  transition: width 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.gauge-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-light);
+  margin-top: 8px;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.risk-stats-block {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.stat-card {
+  border-radius: var(--radius-md);
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--white);
+  box-shadow: var(--shadow-soft);
+  border: 1px solid rgba(10, 22, 40, 0.05);
+}
+
+.stat-total {
+  border-left: 6px solid var(--sky-blue);
+}
+
+.stat-abnormal {
+  border-left: 6px solid var(--danger);
+  background: var(--danger-lt);
+}
+
+.stat-num {
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.stat-total .stat-num {
+  color: var(--navy);
+}
+
+.stat-abnormal .stat-num {
+  color: var(--danger);
+}
+
+.stat-label {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: right;
+}
+
+/* ============================================================
+   PATTERNS & TRENDS
+============================================================ */
+.section-subheading {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--navy);
+  margin: 32px 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.subheading-note {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: #F8FAFC;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+}
+
+.pattern-item {
+  background: var(--white);
+  border-left: 4px solid var(--warning);
+  border-radius: var(--radius-sm);
+  padding: 20px;
+  font-size: 0.95rem;
+  color: var(--text-main);
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+/* ============================================================
+   CHAT SECTION (FLOATING LABELS)
+============================================================ */
+.chat-window {
+  background: var(--white);
+  border: 1px solid rgba(10, 22, 40, 0.08);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  min-height: 300px;
+  max-height: 450px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 20px;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.02);
+}
+
+.chat-bubble {
+  max-width: 85%;
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.chat-bubble-user {
+  background: linear-gradient(135deg, var(--sky-blue), var(--sky-blue-hover));
+  color: var(--white);
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 4px 12px rgba(74, 158, 255, 0.2);
+}
+
+.chat-bubble-bot {
+  background: var(--warm-gray);
+  color: var(--text-main);
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 12px;
+  position: relative;
+}
+
+.chat-input-row input {
+  flex: 1;
+  padding: 16px 20px;
+  border: 2px solid rgba(10, 22, 40, 0.1);
+  border-radius: var(--radius-md);
+  font-family: var(--font);
+  font-size: 1.05rem;
+  outline: none;
+  background: var(--white);
+  transition: all var(--ease);
+}
+
+.chat-input-row input:focus {
+  border-color: var(--sky-blue);
+  box-shadow: 0 0 0 4px rgba(74, 158, 255, 0.15);
+}
+
+.btn-send {
+  width: auto;
+  padding: 0 32px;
+  margin-top: 0;
+}
+
+.chat-suggestions {
+  margin-bottom: 20px;
+}
+
+.suggestion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chip {
+  background: var(--white);
+  border: 1px solid rgba(10, 22, 40, 0.1);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all var(--ease);
+}
+
+.chip:hover {
+  background: var(--sky-blue-light);
+  border-color: var(--sky-blue);
+  color: var(--sky-blue);
+  transform: translateY(-2px);
+}
+
+/* ============================================================
+   FOOTER
+============================================================ */
+.site-footer {
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  border-top: 1px solid rgba(10, 22, 40, 0.05);
+}
+
+/* ============================================================
+   TOAST
+============================================================ */
+.toast {
+  position: fixed;
+  bottom: 40px;
+  right: 40px;
+  padding: 16px 28px;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--white);
+  z-index: 1000;
+  animation: slideUp 0.4s var(--ease-spring);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+==================================================
+File: tests\test_analyze.py
+==================================================
+
+import requests
+import json
+
+url = "http://localhost:8000/analyze"
+payload = {
+    "tests": [
+        {
+            "test_name": "Potassium",
+            "measured_value": 2.0,
+            "unit": "mmol/L",
+            "reference_range": "3.5 - 5.1"
+        },
+        {
+            "test_name": "LDL Cholesterol",
+            "measured_value": 145.0,
+            "unit": "mg/dL",
+            "reference_range": "< 130"
+        }
+    ],
+    "historical_tests": [
+        {
+            "test_name": "LDL Cholesterol",
+            "measured_value": 110.0,
+            "unit": "mg/dL",
+            "reference_range": "< 130"
+        }
+    ]
+}
+
+response = requests.post(url, json=payload)
+print(json.dumps(response.json(), indent=2))
+
+
+==================================================
+File: tests\verify_markdown.js
+==================================================
+
+function markdownToHtml(md) {
+    if (!md) return "";
+    let html = md
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    html = html.replace(/^##\s+(.+)$/gm, '<strong style="font-size:1.05em;display:block;margin:10px 0 4px">$1</strong>');
+    html = html.replace(/^---$/gm, '<hr>');
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/([^\*]|^)\*([^\*]+)\*([^\*]|$)/g, '$1<em>$2</em>$3');
+    html = html.replace(/^[\-•]\s+(.+)$/gm, '<div style="padding-left:16px;margin:3px 0">• $1</div>');
+    html = html.replace(/\n\n/g, '<br><br>');
+    html = html.replace(/\n/g, '<br>');
+    html = html.replace(/⚠️([\s\S]*?)\*(.*?)\*/gi, (match, p1, p2) => {
+        return `<div class="safety-card"><strong>⚠️ Note:</strong> ${p2}</div>`;
+    });
+    return html;
+}
+
+const tests = [
+    { name: "Basic Bold", input: "Hello **world**", expected: "Hello <strong>world</strong>" },
+    { name: "Basic Italic", input: "Hello *world*", expected: "Hello <em>world</em>" },
+    { name: "Safety Card", input: "⚠️ *Disclaimer text*", expected: '<div class="safety-card"><strong>⚠️ Note:</strong> Disclaimer text</div>' },
+    { name: "Safety Card with text before", input: "Warning: ⚠️ *Disclaimer text*", expected: 'Warning: <div class="safety-card"><strong>⚠️ Note:</strong> Disclaimer text</div>' },
+    { name: "Multi-line", input: "Paragraph 1\n\nParagraph 2", expected: 'Paragraph 1<br><br>Paragraph 2' }
+];
+
+tests.forEach(test => {
+    const result = markdownToHtml(test.input);
+    if (result === test.expected) {
+        console.log(`PASS: ${test.name}`);
+    } else {
+        console.log(`FAIL: ${test.name}`);
+        console.log(`  Input:    ${test.input}`);
+        console.log(`  Expected: ${test.expected}`);
+        console.log(`  Actual:   ${result}`);
+    }
+});
+

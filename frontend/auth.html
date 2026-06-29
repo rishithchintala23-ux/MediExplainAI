@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="MediExplain AI – Sign in or create an account to save your reports." />
+    <title>MediExplain AI — Sign In</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+    <style>
+        /* ── CSS Variables (matches main app) ─────────────────────── */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg: #070d1a;
+            --surface: rgba(255, 255, 255, 0.04);
+            --border: rgba(255, 255, 255, 0.08);
+            --accent: #00e5a0;
+            --accent-blue: #0066ff;
+            --text-primary: #f0f4ff;
+            --text-secondary: rgba(240, 244, 255, 0.55);
+            --err: #ff4d6d;
+            --warn: #ffab40;
+        }
+
+        body {
+            min-height: 100vh;
+            background: var(--bg);
+            font-family: "DM Sans", sans-serif;
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Ambient blobs */
+        .blob {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(90px);
+            opacity: 0.15;
+            pointer-events: none;
+        }
+
+        .blob-1 {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, #00e5a0, transparent);
+            top: -15%;
+            left: -10%;
+        }
+
+        .blob-2 {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, #0066ff, transparent);
+            bottom: -10%;
+            right: -5%;
+        }
+
+        /* Card */
+        .auth-card {
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 40px 36px;
+            width: 100%;
+            max-width: 420px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Logo */
+        .logo-block {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 28px;
+        }
+
+        .logo-mark {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #00e5a0, #0066ff);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo-mark svg {
+            display: block;
+        }
+
+        .logo-text {
+            font-family: "Syne", sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+
+        .logo-ai {
+            color: var(--accent);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 28px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-family: "DM Sans", sans-serif;
+            font-size: 0.95rem;
+            font-weight: 500;
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            transition: color 0.2s, border-color 0.2s;
+        }
+
+        .tab-btn.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        /* Forms */
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .form-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 14px;
+            color: var(--text-primary);
+            font-family: "DM Sans", sans-serif;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(0, 229, 160, 0.12);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        /* Submit button */
+        .btn-auth {
+            width: 100%;
+            padding: 13px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #00e5a0, #0066ff);
+            color: #fff;
+            font-family: "Syne", sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            margin-top: 8px;
+        }
+
+        .btn-auth:hover {
+            opacity: 0.92;
+            transform: translateY(-1px);
+        }
+
+        .btn-auth:active {
+            transform: translateY(0);
+        }
+
+        .btn-auth:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Error message */
+        .auth-error {
+            background: rgba(255, 77, 109, 0.12);
+            border: 1px solid rgba(255, 77, 109, 0.3);
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 0.875rem;
+            color: var(--err);
+            margin-top: 14px;
+            display: none;
+        }
+
+        .auth-error.visible {
+            display: block;
+        }
+
+        .auth-success {
+            background: rgba(0, 229, 160, 0.1);
+            border: 1px solid rgba(0, 229, 160, 0.3);
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 0.875rem;
+            color: var(--accent);
+            margin-top: 14px;
+            display: none;
+        }
+
+        .auth-success.visible {
+            display: block;
+        }
+
+        /* Skip link */
+        .skip-auth {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .skip-auth a {
+            color: var(--accent-blue);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .skip-auth a:hover {
+            text-decoration: underline;
+        }
+
+        /* Disclaimer */
+        .auth-disclaimer {
+            margin-top: 16px;
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            opacity: 0.7;
+        }
+
+        /* Loader spinner */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="blob blob-1" aria-hidden="true"></div>
+    <div class="blob blob-2" aria-hidden="true"></div>
+
+    <div class="auth-card">
+        <!-- Logo -->
+        <div class="logo-block">
+            <div class="logo-mark">
+                <svg width="22" height="22" viewBox="0 0 28 28" fill="none">
+                    <rect width="28" height="28" rx="8" fill="url(#lg1auth)" />
+                    <path d="M14 7v14M7 14h14" stroke="white" stroke-width="2.5" stroke-linecap="round" />
+                    <defs>
+                        <linearGradient id="lg1auth" x1="0" y1="0" x2="28" y2="28">
+                            <stop stop-color="#00E5A0" />
+                            <stop offset="1" stop-color="#0066FF" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            <span class="logo-text">MediExplain<span class="logo-ai"> AI</span></span>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs" role="tablist">
+            <button class="tab-btn active" id="tab-login" role="tab" aria-selected="true" aria-controls="panel-login">
+                <i class="fa-solid fa-right-to-bracket"></i> Log In
+            </button>
+            <button class="tab-btn" id="tab-register" role="tab" aria-selected="false" aria-controls="panel-register">
+                <i class="fa-solid fa-user-plus"></i> Register
+            </button>
+        </div>
+
+        <!-- Login Panel -->
+        <div class="tab-panel active" id="panel-login" role="tabpanel">
+            <form id="form-login" novalidate>
+                <div class="form-group">
+                    <label class="form-label" for="login-email">Email Address</label>
+                    <input class="form-input" type="email" id="login-email" name="email" placeholder="you@example.com"
+                        autocomplete="email" required />
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="login-password">Password</label>
+                    <input class="form-input" type="password" id="login-password" name="password" placeholder="••••••••"
+                        autocomplete="current-password" required />
+                </div>
+                <button class="btn-auth" type="submit" id="btn-login">
+                    <i class="fa-solid fa-right-to-bracket"></i> Log In
+                </button>
+                <div class="auth-error" id="login-error"></div>
+                <div class="auth-success" id="login-success"></div>
+            </form>
+        </div>
+
+        <!-- Register Panel -->
+        <div class="tab-panel" id="panel-register" role="tabpanel">
+            <form id="form-register" novalidate>
+                <div class="form-group">
+                    <label class="form-label" for="reg-email">Email Address</label>
+                    <input class="form-input" type="email" id="reg-email" name="email" placeholder="you@example.com"
+                        autocomplete="email" required />
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="reg-password">Password</label>
+                    <input class="form-input" type="password" id="reg-password" name="password"
+                        placeholder="Min. 6 characters" autocomplete="new-password" required />
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="reg-confirm">Confirm Password</label>
+                    <input class="form-input" type="password" id="reg-confirm" name="confirm"
+                        placeholder="Repeat password" autocomplete="new-password" required />
+                </div>
+                <button class="btn-auth" type="submit" id="btn-register">
+                    <i class="fa-solid fa-user-plus"></i> Create Account
+                </button>
+                <div class="auth-error" id="reg-error"></div>
+                <div class="auth-success" id="reg-success"></div>
+            </form>
+        </div>
+
+        <!-- Skip -->
+        <p class="skip-auth">
+            <a href="index.html">← Continue without account</a>
+            <span style="color:var(--text-secondary)"> (history won't be saved)</span>
+        </p>
+
+        <p class="auth-disclaimer">
+            <i class="fa-solid fa-shield-halved"></i>
+            Passwords are bcrypt-hashed. We never store them in plaintext.
+        </p>
+    </div>
+
+    <script>
+        "use strict";
+        const API = "";
+
+        // ── Tabs ────────────────────────────────────────────────────
+        document.getElementById("tab-login").addEventListener("click", () => switchTab("login"));
+        document.getElementById("tab-register").addEventListener("click", () => switchTab("register"));
+        function switchTab(t) {
+            document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+            document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+            document.getElementById("tab-" + t).classList.add("active");
+            document.getElementById("panel-" + t).classList.add("active");
+        }
+
+        // ── Helpers ─────────────────────────────────────────────────
+        function showMsg(el, msg, isErr) {
+            el.textContent = msg;
+            el.className = isErr ? "auth-error visible" : "auth-success visible";
+        }
+        function setBtn(btn, loading) {
+            btn.disabled = loading;
+            btn.innerHTML = loading
+                ? '<span class="spinner"></span> Please wait…'
+                : btn.dataset.original;
+        }
+
+        // Store original labels
+        document.querySelectorAll(".btn-auth").forEach(b => b.dataset.original = b.innerHTML);
+
+        // ── Login ────────────────────────────────────────────────────
+        document.getElementById("form-login").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = document.getElementById("login-email").value.trim();
+            const password = document.getElementById("login-password").value;
+            const errEl = document.getElementById("login-error");
+            const okEl = document.getElementById("login-success");
+            const btn = document.getElementById("btn-login");
+
+            errEl.className = "auth-error"; okEl.className = "auth-success";
+            if (!email || !password) { showMsg(errEl, "Please fill in all fields.", true); return; }
+
+            setBtn(btn, true);
+            try {
+                const res = await fetch(`${API}/auth/login`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password }),
+                });
+                const data = await res.json();
+                if (!res.ok) { showMsg(errEl, data.detail || "Login failed.", true); return; }
+                sessionStorage.setItem("medi_token", data.access_token);
+                sessionStorage.setItem("medi_email", data.email);
+                showMsg(okEl, "✓ Logged in! Redirecting…", false);
+                setTimeout(() => window.location.href = "index.html", 800);
+            } catch {
+                showMsg(errEl, "Could not connect to server. Please try again.", true);
+            } finally {
+                setBtn(btn, false);
+            }
+        });
+
+        // ── Register ─────────────────────────────────────────────────
+        document.getElementById("form-register").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = document.getElementById("reg-email").value.trim();
+            const password = document.getElementById("reg-password").value;
+            const confirm = document.getElementById("reg-confirm").value;
+            const errEl = document.getElementById("reg-error");
+            const okEl = document.getElementById("reg-success");
+            const btn = document.getElementById("btn-register");
+
+            errEl.className = "auth-error"; okEl.className = "auth-success";
+            if (!email || !password || !confirm) { showMsg(errEl, "Please fill in all fields.", true); return; }
+            if (password !== confirm) { showMsg(errEl, "Passwords do not match.", true); return; }
+            if (password.length < 6) { showMsg(errEl, "Password must be at least 6 characters.", true); return; }
+
+            setBtn(btn, true);
+            try {
+                const res = await fetch(`${API}/auth/register`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password }),
+                });
+                const data = await res.json();
+                if (!res.ok) { showMsg(errEl, data.detail || "Registration failed.", true); return; }
+                sessionStorage.setItem("medi_token", data.access_token);
+                sessionStorage.setItem("medi_email", data.email);
+                showMsg(okEl, "✓ Account created! Redirecting…", false);
+                setTimeout(() => window.location.href = "index.html", 800);
+            } catch {
+                showMsg(errEl, "Could not connect to server. Please try again.", true);
+            } finally {
+                setBtn(btn, false);
+            }
+        });
+    </script>
+</body>
+
+</html>

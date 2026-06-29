@@ -5,274 +5,467 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description"
-    content="Lab Report Intelligence Agent – AI-powered tool to understand your medical lab report in simple, calm language." />
+    content="MediExplain AI – AI-powered lab report explainer. Understand your medical results in clear, calm language." />
   <title>MediExplain AI</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+  <link
+    href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
 
+  <!-- NOISE TEXTURE OVERLAY -->
+  <div class="noise-overlay" aria-hidden="true"></div>
+
+  <!-- AMBIENT GLOW BLOBS -->
+  <div class="ambient" aria-hidden="true">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
+  <!-- ============================================================
+       HISTORY SIDEBAR (slide-in)
+  ============================================================ -->
+  <aside class="history-sidebar" id="history-sidebar" aria-label="My Reports">
+    <div class="sidebar-header">
+      <div class="sidebar-title"><i class="fa-solid fa-clock-rotate-left"></i> My Reports</div>
+      <button class="sidebar-close" id="sidebar-close" aria-label="Close sidebar"><i
+          class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="sidebar-body" id="history-list">
+      <div class="history-empty" id="history-empty">
+        <i class="fa-regular fa-folder-open"></i>
+        <p>No saved reports yet.<br>Analyse a report to see it here.</p>
+      </div>
+    </div>
+  </aside>
+  <div class="sidebar-overlay hidden" id="sidebar-overlay"></div>
+
   <!-- ============================================================
        HEADER
   ============================================================ -->
-  <header class="site-header">
+  <header class="site-header" id="top">
     <div class="header-inner">
       <div class="logo-block">
-        <div class="logo-icon">
-          <i class="fa-solid fa-notes-medical" style="color: white; font-size: 22px;"></i>
+        <div class="logo-mark">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <rect width="28" height="28" rx="8" fill="url(#lg1)" />
+            <path d="M14 7v14M7 14h14" stroke="white" stroke-width="2.5" stroke-linecap="round" />
+            <defs>
+              <linearGradient id="lg1" x1="0" y1="0" x2="28" y2="28">
+                <stop stop-color="#00E5A0" />
+                <stop offset="1" stop-color="#0066FF" />
+              </linearGradient>
+            </defs>
+          </svg>
         </div>
-        <div>
-          <h1 class="site-title">MediExplain AI</h1>
-        </div>
+        <span class="logo-text">MediExplain<span class="logo-ai"> AI</span></span>
       </div>
-      <div class="header-badge"><i class="fa-solid fa-graduation-cap"></i> Educational Tool</div>
+      <div class="header-right">
+        <!-- Language Selector -->
+        <div class="lang-select-wrap">
+          <select id="lang-select" aria-label="Select language" title="Select language">
+            <option value="en">🇬🇧 English</option>
+            <option value="hi">🇮🇳 हिंदी</option>
+            <option value="te">🇮🇳 తెలుగు</option>
+            <option value="ta">🇮🇳 தமிழ்</option>
+            <option value="kn">🇮🇳 ಕನ್ನಡ</option>
+            <option value="bn">🇧🇩 বাংলা</option>
+            <option value="mr">🇮🇳 मराठी</option>
+            <option value="es">🇪🇸 Español</option>
+            <option value="fr">🇫🇷 Français</option>
+            <option value="ar">🇸🇦 عربي</option>
+            <option value="zh">🇨🇳 中文</option>
+            <option value="pt">🇧🇷 Português</option>
+          </select>
+        </div>
+
+        <!-- Auth Block (shown when logged in) -->
+        <div class="user-block hidden" id="user-block">
+          <button class="btn-history" id="btn-history" title="My Reports" aria-label="Open my reports">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            <span class="user-block-label" data-i18n="myReports">My Reports</span>
+          </button>
+          <div class="user-avatar" id="user-avatar" title="">
+            <i class="fa-solid fa-circle-user"></i>
+          </div>
+          <button class="btn-logout" id="btn-logout" title="Logout" aria-label="Logout">
+            <i class="fa-solid fa-right-from-bracket"></i>
+          </button>
+        </div>
+
+        <!-- Login button (shown when not logged in) -->
+        <a href="auth.html" class="btn-login-header" id="btn-login-header">
+          <i class="fa-solid fa-right-to-bracket"></i>
+          <span data-i18n="login">Log In</span>
+        </a>
+
+        <span class="edu-pill"><i class="fa-solid fa-graduation-cap"></i> <span data-i18n="educationalTool">Educational
+            Tool</span></span>
+      </div>
     </div>
   </header>
 
   <!-- ============================================================
-       DISCLAIMER BANNER
+       DISCLAIMER STRIP
   ============================================================ -->
-  <div class="disclaimer-banner" role="note" aria-label="Disclaimer">
-    <i class="fa-solid fa-circle-exclamation"></i> <strong>Disclaimer:</strong> This tool is for <strong>educational
-      purposes only</strong>. It is not a diagnostic
-    or clinical decision system. Always consult a qualified healthcare professional.
+  <div class="disclaimer-strip" role="note">
+    <i class="fa-solid fa-triangle-exclamation"></i>
+    <span data-i18n="disclaimerStrip">This tool is for <strong>educational purposes only</strong>. Not a diagnostic or
+      clinical decision system. Always consult a qualified healthcare professional.</span>
   </div>
 
-  <main class="main-content">
+  <!-- ============================================================
+       HERO
+  ============================================================ -->
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="hero-tag"><span class="pulse-dot"></span> RAG-Powered · Llama 3.3 · FAISS</div>
+      <h1 class="hero-title" data-i18n="heroTitle">Understand Your<br><span class="gradient-text">Lab Report</span></h1>
+      <p class="hero-sub" data-i18n="heroSub">Upload your medical report and get a calm, plain-language explanation —
+        powered by AI and grounded in verified medical education content.</p>
+    </div>
+  </section>
 
-    <!-- ============================================================
-         HERO SECTION
-    ============================================================ -->
-    <section class="hero-section">
-      <h1 class="hero-title">AI-Powered Medical Report Simplifier</h1>
-      <p class="hero-subtitle">Turning complex diagnostic reports into clear, safe, and actionable insights.</p>
+  <!-- ============================================================
+       MAIN CONTENT
+  ============================================================ -->
+  <main class="main-wrap">
+
+    <!-- STEP 1: UPLOAD -->
+    <section class="panel" id="section-upload">
+      <div class="panel-label"><span class="step-num">01</span> <span data-i18n="uploadReport">Upload Report</span>
+      </div>
+
+      <!-- Upload / Manual Toggle Tabs -->
+      <div class="upload-tabs" role="tablist">
+        <button class="upload-tab active" id="tab-upload" role="tab" data-i18n="uploadPDF">📄 Upload PDF</button>
+        <button class="upload-tab" id="tab-manual" role="tab" data-i18n="enterManually">✍️ Enter Manually</button>
+      </div>
+
+      <!-- PDF Upload Panel -->
+      <div id="panel-upload-pdf">
+        <div class="upload-grid">
+          <!-- Primary Upload -->
+          <div class="dropzone" id="upload-zone" role="button" tabindex="0"
+            aria-label="Click or drag to upload current PDF report">
+            <input type="file" id="file-input" accept=".pdf" aria-label="PDF upload" />
+            <div class="dropzone-content">
+              <div class="dz-icon">
+                <i class="fa-solid fa-file-medical"></i>
+              </div>
+              <p class="dz-title" data-i18n="currentReport">Current Report</p>
+              <p class="dz-sub" data-i18n="dropOrBrowse">Drop PDF here or <span class="dz-link"
+                  data-i18n="browse">browse</span></p>
+              <p class="dz-note">PDF only · Max 10 MB</p>
+            </div>
+            <div class="dz-file-badge hidden" id="upload-filename">
+              <i class="fa-solid fa-circle-check"></i>
+              <span id="filename-text"></span>
+            </div>
+          </div>
+
+          <!-- Historical Upload -->
+          <div class="dropzone dropzone-secondary" id="upload-zone-historical" role="button" tabindex="0"
+            aria-label="Click or drag to upload previous PDF report">
+            <input type="file" id="file-input-historical" accept=".pdf" aria-label="Historical PDF upload" />
+            <div class="dropzone-content">
+              <div class="dz-icon dz-icon-secondary">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+              </div>
+              <p class="dz-title"><span data-i18n="previousReport">Previous Report</span> <span class="optional-tag"
+                  data-i18n="optional">Optional</span></p>
+              <p class="dz-sub" data-i18n="forTrend">For trend comparison</p>
+            </div>
+            <div class="dz-file-badge hidden" id="upload-filename-historical">
+              <i class="fa-solid fa-circle-check"></i>
+              <span id="filename-text-historical"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="upload-actions">
+          <button class="btn btn-primary" id="btn-upload" disabled>
+            <i class="fa-solid fa-flask-vial"></i>
+            <span data-i18n="analyseReport">Analyse Report</span>
+          </button>
+          <div class="loader hidden" id="upload-loader">
+            <div class="loader-ring"></div>
+            <span data-i18n="extractingPDF">Extracting values from PDF…</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Manual Entry Panel -->
+      <div id="panel-manual" class="hidden">
+        <div class="manual-table-wrap">
+          <table class="manual-table" id="manual-table">
+            <thead>
+              <tr>
+                <th data-i18n="testName">Test Name</th>
+                <th data-i18n="value">Value</th>
+                <th data-i18n="unit">Unit</th>
+                <th data-i18n="refRange">Reference Range</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="manual-tbody">
+              <!-- rows added dynamically -->
+            </tbody>
+          </table>
+          <datalist id="test-suggestions">
+            <option value="Hemoglobin"></option>
+            <option value="RBC"></option>
+            <option value="WBC"></option>
+            <option value="Platelets"></option>
+            <option value="Hematocrit"></option>
+            <option value="MCV"></option>
+            <option value="MCH"></option>
+            <option value="MCHC"></option>
+            <option value="Fasting Glucose"></option>
+            <option value="HbA1c"></option>
+            <option value="Creatinine"></option>
+            <option value="BUN"></option>
+            <option value="Sodium"></option>
+            <option value="Potassium"></option>
+            <option value="Calcium"></option>
+            <option value="Total Cholesterol"></option>
+            <option value="LDL"></option>
+            <option value="HDL"></option>
+            <option value="Triglycerides"></option>
+            <option value="ALT"></option>
+            <option value="AST"></option>
+            <option value="TSH"></option>
+            <option value="T3"></option>
+            <option value="T4"></option>
+            <option value="Vitamin D"></option>
+            <option value="Vitamin B12"></option>
+            <option value="Iron"></option>
+            <option value="Ferritin"></option>
+          </datalist>
+        </div>
+        <div class="manual-actions">
+          <button class="btn btn-outline" id="btn-add-row">
+            <i class="fa-solid fa-plus"></i> <span data-i18n="addRow">Add Row</span>
+          </button>
+          <button class="btn btn-primary" id="btn-manual-analyze" disabled>
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span data-i18n="analyseManual">Analyse Entries</span>
+          </button>
+          <div class="loader hidden" id="manual-loader">
+            <div class="loader-ring"></div>
+            <span data-i18n="runningAnalysis">Running analysis…</span>
+          </div>
+        </div>
+      </div>
     </section>
 
-    <!-- ============================================================
-         SECTION 1: UPLOAD REPORT
-    ============================================================ -->
-    <section class="card upload-section" id="section-upload" aria-labelledby="upload-heading">
-
-      <div class="upload-zone" id="upload-zone" role="button" tabindex="0" aria-label="Click or drag to upload PDF">
-        <div class="upload-zone-inner">
-          <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
-          <p class="upload-primary">Click to Upload or Drag & Drop (Current Report)</p>
-          <p class="upload-secondary">PDF files only · Max 10 MB</p>
-        </div>
-        <input type="file" id="file-input" accept=".pdf" aria-label="PDF file upload" />
+    <!-- STEP 2: EXTRACTED VALUES -->
+    <section class="panel hidden" id="section-table">
+      <div class="panel-header">
+        <div class="panel-label"><span class="step-num">02</span> <span data-i18n="extractedValues">Extracted Lab
+            Values</span></div>
+        <span class="count-badge" id="test-count-badge"></span>
       </div>
 
-      <div class="upload-filename hidden" id="upload-filename">
-        <span class="filename-icon"><i class="fa-solid fa-file-pdf"></i></span>
-        <span id="filename-text"></span>
-      </div>
-
-      <div class="upload-zone secondary-upload" id="upload-zone-historical" role="button" tabindex="0"
-        aria-label="Click or drag to upload previous PDF">
-        <div class="upload-zone-inner">
-          <div class="upload-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
-          <p class="upload-primary">Optional: Upload Previous Report (For Trends)</p>
-        </div>
-        <input type="file" id="file-input-historical" accept=".pdf" aria-label="Secondary PDF file upload" />
-      </div>
-
-      <div class="upload-filename hidden" id="upload-filename-historical">
-        <span class="filename-icon"><i class="fa-solid fa-file-pdf"></i></span>
-        <span id="filename-text-historical"></span>
-      </div>
-
-      <button class="btn btn-primary" id="btn-upload" disabled aria-label="Analyse lab report">
-        <i class="fa-solid fa-flask-vial"></i> Analyse Report
-      </button>
-
-      <div class="loader hidden" id="upload-loader" aria-live="polite">
-        <div class="spinner"></div>
-        <span>Extracting values from PDF…</span>
-      </div>
-    </section>
-
-    <!-- ============================================================
-         SECTION 2: EXTRACTED LAB VALUES CARDS
-    ============================================================ -->
-    <section class="card hidden" id="section-table" aria-labelledby="table-heading">
-      <div class="card-header">
-        <div class="card-title-group">
-          <span class="card-icon"><i class="fa-solid fa-chart-column"></i></span>
-          <h2 id="table-heading">Extracted Lab Values</h2>
-        </div>
-        <span class="badge badge-info" id="test-count-badge"></span>
-      </div>
-
-      <div class="table-wrapper">
-        <table id="results-table" class="premium-table" aria-label="Lab test results">
+      <div class="table-scroll">
+        <table class="lab-table" id="results-table" aria-label="Lab test results">
           <thead>
             <tr>
-              <th>Test Name</th>
-              <th>Your Value</th>
-              <th>Unit</th>
-              <th>Reference Range</th>
-              <th>Status / Insight</th>
+              <th data-i18n="testName">Test Name</th>
+              <th data-i18n="yourValue">Your Value</th>
+              <th data-i18n="unit">Unit</th>
+              <th data-i18n="refRange">Reference Range</th>
+              <th data-i18n="status">Status</th>
             </tr>
           </thead>
           <tbody id="results-tbody"></tbody>
         </table>
       </div>
 
-      <button class="btn btn-primary" id="btn-analyze" aria-label="Generate AI analysis">
-        <i class="fa-solid fa-wand-magic-sparkles"></i> Generate AI Analysis
-      </button>
-
-      <div class="loader hidden" id="analyze-loader" aria-live="polite">
-        <div class="spinner"></div>
-        <span>Running analysis and generating secure insights…</span>
+      <div class="panel-actions">
+        <button class="btn btn-primary" id="btn-analyze">
+          <i class="fa-solid fa-wand-magic-sparkles"></i>
+          <span data-i18n="generateAnalysis">Generate AI Analysis</span>
+        </button>
+        <div class="loader hidden" id="analyze-loader">
+          <div class="loader-ring"></div>
+          <span data-i18n="runningAnalysis">Running analysis — generating insights…</span>
+        </div>
       </div>
     </section>
 
-    <!-- ============================================================
-         SECTION 3+4: RISK GAUGE & ABNORMAL HIGHLIGHTS
-    ============================================================ -->
-    <section class="card hidden" id="section-risk" aria-labelledby="risk-heading">
-      <div class="card-header">
-        <div class="card-title-group">
-          <span class="card-icon"><i class="fa-solid fa-stethoscope"></i></span>
-          <h2 id="risk-heading">Risk Overview</h2>
-        </div>
+    <!-- STEP 3: RISK OVERVIEW -->
+    <section class="panel hidden" id="section-risk">
+      <div class="panel-label"><span class="step-num">03</span> <span data-i18n="riskOverview">Risk Overview</span>
       </div>
 
-      <div class="risk-grid">
-        <!-- Risk Gauge -->
-        <div class="risk-gauge-block">
-          <p class="gauge-label">Risk Category</p>
-          <div class="risk-category-badge" id="risk-category-badge">—</div>
-          <div class="gauge-track" aria-label="Risk gauge" role="progressbar" aria-valuenow="0" aria-valuemin="0"
-            aria-valuemax="100">
-            <div class="gauge-fill" id="gauge-fill"></div>
+      <div class="risk-layout">
+        <!-- Gauge -->
+        <div class="gauge-block">
+          <div class="gauge-wrap">
+            <svg class="gauge-svg" viewBox="0 0 200 110" fill="none" aria-hidden="true">
+              <!-- Track arc -->
+              <path d="M 20 100 A 80 80 0 0 1 180 100" stroke="#1e2d45" stroke-width="16" stroke-linecap="round"
+                fill="none" />
+              <!-- Fill arc (animated via JS) -->
+              <path id="gauge-arc" d="M 20 100 A 80 80 0 0 1 180 100" stroke="#00E5A0" stroke-width="16"
+                stroke-linecap="round" fill="none" stroke-dasharray="251.2" stroke-dashoffset="251.2"
+                style="transition: stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1), stroke 0.6s ease" />
+              <!-- Center dot -->
+              <circle cx="100" cy="100" r="6" fill="#00E5A0" id="gauge-dot" style="transition: fill 0.6s ease" />
+            </svg>
+            <div class="gauge-center">
+              <div class="gauge-category" id="risk-category-badge">—</div>
+              <div class="gauge-score"><span data-i18n="score">Score</span>: <strong id="risk-score-text">—</strong>
+              </div>
+            </div>
           </div>
           <div class="gauge-scale">
-            <span>Stable</span>
-            <span>Monitor</span>
-            <span>Moderate</span>
-            <span>Elevated</span>
+            <span data-i18n="stable">Stable</span><span data-i18n="monitor">Monitor</span><span
+              data-i18n="moderate">Moderate</span><span data-i18n="elevated">Elevated</span>
           </div>
-          <p class="gauge-score-text" style="font-size: 0.8rem; font-weight: 500; color: #64748B; margin-top: 14px;">
-            Calculated Score: <strong id="risk-score-text">—</strong></p>
         </div>
 
-        <!-- Abnormal Count -->
-        <div class="risk-stats-block">
-          <div class="stat-card stat-total">
+        <!-- Stats -->
+        <div class="stats-block">
+          <div class="stat-tile stat-blue">
+            <div class="stat-icon"><i class="fa-solid fa-vial"></i></div>
             <div>
-              <span class="stat-num" id="stat-total">—</span>
-              <span class="stat-label">Tests Reviewed</span>
+              <div class="stat-val" id="stat-total">—</div>
+              <div class="stat-lbl" data-i18n="testsReviewed">Tests Reviewed</div>
             </div>
-            <i class="fa-solid fa-vial" style="font-size: 2rem; color: #4A9EFF; opacity: 0.2;"></i>
           </div>
-          <div class="stat-card stat-abnormal">
+          <div class="stat-tile stat-red">
+            <div class="stat-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
             <div>
-              <span class="stat-num" id="stat-abnormal">—</span>
-              <span class="stat-label">Outside Range</span>
+              <div class="stat-val" id="stat-abnormal">—</div>
+              <div class="stat-lbl" data-i18n="outsideRange">Outside Range</div>
             </div>
-            <i class="fa-solid fa-triangle-exclamation" style="font-size: 2rem; color: #EF4444; opacity: 0.2;"></i>
           </div>
         </div>
       </div>
 
-      <!-- Correlation Patterns -->
-      <div id="patterns-section" class="hidden">
-        <h3 class="section-subheading"><i class="fa-solid fa-diagram-project" style="color: #4A9EFF;"></i> Observed
-          Patterns <span class="subheading-note">Educational only</span></h3>
-        <div id="patterns-list"></div>
-      </div>
-
-      <!-- Trend Analysis -->
-      <div id="trends-section" class="hidden">
-        <h3 class="section-subheading"><i class="fa-solid fa-arrow-trend-up" style="color: #4A9EFF;"></i> Trend Analysis
-          <span class="subheading-note">Compared to previous</span>
+      <!-- Patterns -->
+      <div id="patterns-section" class="hidden subsection">
+        <h3 class="sub-heading">
+          <i class="fa-solid fa-diagram-project"></i> <span data-i18n="observedPatterns">Observed Patterns</span>
+          <span class="sub-tag" data-i18n="educationalOnly">Educational only</span>
         </h3>
-        <div id="trends-list"></div>
+        <div id="patterns-list" class="insight-list"></div>
+      </div>
+
+      <!-- Trends -->
+      <div id="trends-section" class="hidden subsection">
+        <h3 class="sub-heading">
+          <i class="fa-solid fa-arrow-trend-up"></i> <span data-i18n="trendAnalysis">Trend Analysis</span>
+          <span class="sub-tag" data-i18n="vsPrev">vs. previous report</span>
+        </h3>
+        <div id="trends-list" class="insight-list"></div>
       </div>
     </section>
 
-    <!-- ============================================================
-         SECTION 5: AI SUMMARY
-    ============================================================ -->
-    <section class="card hidden" id="section-summary" aria-labelledby="summary-heading">
-      <div id="emergency-alert" class="emergency-alert hidden">
-        <span class="alert-icon"><i class="fa-solid fa-truck-medical"></i></span>
-        <div class="alert-content">
-          <h3 class="alert-title">Urgent Alert Detected</h3>
-          <p class="alert-desc">This result may require urgent medical attention. Please consult a healthcare provider
-            immediately.</p>
+    <!-- STEP 4: AI SUMMARY -->
+    <section class="panel hidden" id="section-summary">
+      <!-- Emergency Alert -->
+      <div id="emergency-alert" class="emergency-banner hidden">
+        <div class="emergency-icon"><i class="fa-solid fa-siren-on"></i></div>
+        <div>
+          <p class="emergency-title" data-i18n="urgentTitle">Urgent: Seek Medical Attention</p>
+          <p class="emergency-desc" data-i18n="urgentDesc">One or more critical values were detected. Please contact a
+            healthcare provider immediately.</p>
         </div>
       </div>
 
-      <div class="card-header">
-        <div class="card-title-group">
-          <span class="card-icon"><i class="fa-solid fa-brain"></i></span>
-          <h2 id="summary-heading">AI-Generated Summary</h2>
-        </div>
-        <span class="badge badge-safe"><i class="fa-solid fa-shield-halved"></i> Patient Safe</span>
+      <div class="panel-header">
+        <div class="panel-label"><span class="step-num">04</span> <span data-i18n="aiSummary">AI Summary</span></div>
+        <span class="safe-badge"><i class="fa-solid fa-shield-halved"></i> <span
+            data-i18n="patientSafe">Patient-Safe</span></span>
       </div>
-      <div class="ai-summary-content" id="ai-summary-text"></div>
+
+      <div class="ai-summary-box" id="ai-summary-text">
+        <!-- AI content injected here -->
+      </div>
+
+      <!-- Summary Actions -->
+      <div class="summary-actions">
+        <button class="btn btn-tts" id="btn-tts-summary" title="Read Summary Aloud" aria-label="Read summary aloud">
+          <i class="fa-solid fa-volume-high"></i>
+          <span data-i18n="readAloud">🔊 Read Aloud</span>
+        </button>
+        <button class="btn btn-export" id="btn-export" title="Export as PDF" aria-label="Export report as PDF">
+          <i class="fa-solid fa-file-pdf"></i>
+          <span data-i18n="exportPDF">📄 Export Report</span>
+        </button>
+      </div>
     </section>
 
-    <!-- ============================================================
-         SECTION 6: ASK YOUR REPORT CHAT
-    ============================================================ -->
-    <section class="card hidden" id="section-chat" aria-labelledby="chat-heading">
-      <div class="card-header">
-        <div class="card-title-group">
-          <span class="card-icon"><i class="fa-regular fa-comments"></i></span>
-          <h2 id="chat-heading">Ask Your Report</h2>
+    <!-- STEP 5: ASK YOUR REPORT -->
+    <section class="panel hidden" id="section-chat">
+      <div class="panel-header">
+        <div class="panel-label"><span class="step-num">05</span> <span data-i18n="askReport">Ask Your Report</span>
         </div>
-        <span class="badge badge-info"><i class="fa-solid fa-bolt"></i> RAG-Powered</span>
+        <span class="rag-badge"><i class="fa-solid fa-bolt"></i> RAG-Powered</span>
       </div>
 
-      <div class="chat-suggestions">
-        <div class="suggestion-chips">
-          <button class="chip" data-q="What does low hemoglobin mean?">What does low hemoglobin mean?</button>
-          <button class="chip" data-q="Why is LDL important?">Why is LDL important?</button>
-          <button class="chip" data-q="What is a normal fasting glucose?">What is a normal fasting glucose?</button>
-          <button class="chip" data-q="What do white blood cells do?">What do white blood cells do?</button>
-        </div>
+      <div class="chat-chips" id="chat-chips">
+        <button class="chip" data-q="What does low hemoglobin mean?">Low hemoglobin?</button>
+        <button class="chip" data-q="Why is LDL important?">Why LDL matters?</button>
+        <button class="chip" data-q="What is a normal fasting glucose?">Normal fasting glucose?</button>
+        <button class="chip" data-q="What do white blood cells do?">WBC function?</button>
       </div>
 
-      <div class="chat-window" id="chat-window" role="log" aria-live="polite" aria-label="Conversation">
-        <div style="text-align: center; color: var(--text-muted); padding: 40px 20px;">
-          <i class="fa-solid fa-user-doctor"
-            style="font-size: 3rem; color: rgba(74, 158, 255, 0.4); margin-bottom: 16px;"></i>
-          <p style="font-weight: 500;">Ask me anything about your lab report. I'll explain it in simple, calm language
-            using verified medical education content.</p>
+      <div class="chat-window" id="chat-window" role="log" aria-live="polite">
+        <div class="chat-welcome" id="chat-welcome">
+          <div class="chat-welcome-icon"><i class="fa-regular fa-message-medical"></i></div>
+          <p data-i18n="chatWelcome">Ask me anything about your lab report.<br>I explain everything in simple, calm
+            language.</p>
         </div>
       </div>
 
       <div class="chat-input-row">
-        <input type="text" id="chat-input" placeholder="Type your question here…" maxlength="500"
-          aria-label="Your question" />
-        <button class="btn btn-primary btn-send" id="btn-send" aria-label="Send question">
-          Send <i class="fa-solid fa-paper-plane" style="margin-left: 6px;"></i>
+        <input type="text" id="chat-input" placeholder="Type your question…" maxlength="500" aria-label="Your question"
+          autocomplete="off" />
+        <!-- Mic Button -->
+        <button class="btn-mic" id="btn-mic" aria-label="Voice input" title="Voice input">
+          <i class="fa-solid fa-microphone"></i>
+          <span class="mic-indicator hidden" id="mic-indicator"></span>
+        </button>
+        <button class="btn-send" id="btn-send" aria-label="Send question">
+          <i class="fa-solid fa-paper-plane"></i>
         </button>
       </div>
-      <p style="font-size: 0.8rem; color: var(--text-light); text-align: center; margin-top: 14px; font-weight: 500;">
-        <i class="fa-solid fa-shield"></i> AI answers are educational only. Never a diagnosis or prescription.
-      </p>
+      <p class="chat-disclaimer"><i class="fa-solid fa-shield"></i> <span data-i18n="chatDisclaimer">AI answers are
+          educational only — never a diagnosis or prescription.</span></p>
     </section>
 
   </main>
 
   <!-- ============================================================
+       PRINT-ONLY HEADER (hidden normally, shown on print)
+  ============================================================ -->
+  <div class="print-header" aria-hidden="true">
+    <div class="print-logo">MediExplain AI — Lab Report</div>
+    <div class="print-date" id="print-date"></div>
+  </div>
+
+  <!-- ============================================================
        FOOTER
   ============================================================ -->
   <footer class="site-footer">
-    <p><strong>MediExplain AI</strong> · Educational Use Only</p>
-    <p style="opacity: 0.7; margin-top: 6px;">Built with FastAPI · LangChain · FAISS · Llama 3.3 (Groq) · Vanilla JS</p>
+    <p class="footer-brand">MediExplain AI</p>
+    <p class="footer-stack">FastAPI · LangChain · FAISS · Llama 3.3 (Groq) · Vanilla JS</p>
+    <p class="footer-copy" data-i18n="footerCopy">Educational use only · Not a clinical tool</p>
   </footer>
+
+  <!-- TOAST -->
+  <div id="toast-container" aria-live="assertive"></div>
 
   <script src="script.js"></script>
 </body>
